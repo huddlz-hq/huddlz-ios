@@ -29,7 +29,13 @@ struct HuddlDetailView: View {
                             Text(huddl.attributes.timeZone).font(.caption).foregroundStyle(.secondary)
                         }
                     } icon: { Image(systemName: "calendar") }
-                    Label(huddl.location, systemImage: "mappin.and.ellipse")
+                    if huddl.attributes.eventType != .virtual,
+                       let address = huddl.attributes.physicalLocation?.trimmingCharacters(in: .whitespacesAndNewlines),
+                       !address.isEmpty {
+                        HuddlLocationView(address: address).id(address)
+                    } else {
+                        Label(huddl.location, systemImage: "mappin.and.ellipse")
+                    }
                     Divider()
                     Text("About this huddl").font(.title2.bold())
                     Text(huddl.attributes.description?.isEmpty == false ? huddl.attributes.description! : "The organizer hasn’t added a description yet.")
