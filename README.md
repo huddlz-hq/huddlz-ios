@@ -31,7 +31,7 @@ Keep new code grouped by feature as features are added. Add shared UI and networ
 
 ## Public discovery
 
-Browse real huddlz in cards, submit text with the keyboard’s Search action, and filter by event type (all, in person, online, hybrid) and date (all upcoming, this week, this month). Clear the search field to reset the text query. Pull to refresh while keeping the current cards visible. An accent-colored indicator fills as you pull and spins during refresh; Reduce Motion disables the custom arrow rotation, scaling, and fade animation. A failed refresh keeps the cards and filters and offers retry. Use Load more when another API page is available. Opening a card fetches current details separately. Event times display in the event’s time zone.
+Browse real huddlz in cards, submit text with the keyboard’s Search action, and filter by event type (all, in person, online, hybrid) and date (all upcoming, this week, this month). Clear the search field to reset the text query. Pull to refresh while keeping the current cards visible. A failed refresh keeps the cards and filters and offers retry. Use Load more when another API page is available. Opening a card fetches current details separately. Event times display in the event’s time zone.
 
 Choose Anywhere to search for a city or postal code with Apple Maps. Select a place, then choose a distance of 5, 10, 25, 50, or 100 miles. Clear location returns to browsing anywhere and keeps the event search and filters. Place searches run when submitted. Use current location requests location access only after you choose that action, then uses a single fix to find nearby huddlz. Denied access or an unavailable location leaves manual place search available. Leaving the picker cancels a pending lookup.
 
