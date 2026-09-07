@@ -21,19 +21,19 @@ final class DiscoveryUITests: XCTestCase {
         let card = app.buttons["huddl-coffee"]
         XCTAssertTrue(card.waitForExistence(timeout: 5))
         let cardImage = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            Self.greenFraction(card.screenshot().image) > 0.1
+            Self.artworkPixelFraction(card) > 0.1
         }, object: nil)
         XCTAssertEqual(XCTWaiter.wait(for: [cardImage], timeout: 8), .completed)
         card.tap()
         XCTAssertTrue(app.staticTexts["About this huddl"].waitForExistence(timeout: 5))
         let detailImage = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            Self.greenFraction(app.screenshot().image) > 0.03
+            Self.artworkPixelFraction(app) > 0.03
         }, object: nil)
         XCTAssertEqual(XCTWaiter.wait(for: [detailImage], timeout: 8), .completed)
     }
 
     func testMissingAndFailedImagesKeepTheFallbackAndEventDetails() {
-        for imageResponse in [0, 503, 200] {
+        for imageResponse in [503, 200, 0] {
             let event = imageResponse == 0 ? coffee : coffee.replacingOccurrences(
                 of: "\"thumbnail_url\":null", with: "\"thumbnail_url\":\"https://images.example.test/unavailable.png\"")
             let app = launch(routes: [
@@ -43,20 +43,33 @@ final class DiscoveryUITests: XCTestCase {
             ])
             let card = app.buttons["huddl-coffee"]
             XCTAssertTrue(card.waitForExistence(timeout: 5))
-            XCTAssertGreaterThan(Self.greenFraction(card.screenshot().image, fallback: true), 0.01,
+            let attachment = XCTAttachment(screenshot: card.screenshot())
+            attachment.name = "Fallback for image response \(imageResponse)"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+            XCTAssertGreaterThan(Self.artworkPixelFraction(card, fallback: true, region: CGRect(x: 16, y: 16, width: card.frame.width - 32, height: 160)), 0.01,
                                  "Expected the event-type illustration for image response \(imageResponse)")
             card.tap()
             XCTAssertTrue(app.staticTexts["Bring a mug and meet your neighbors."].waitForExistence(timeout: 5))
+            let artwork = CGRect(x: 20, y: app.navigationBars.firstMatch.frame.maxY + 20,
+                                 width: app.frame.width - 40, height: 160)
+            XCTAssertGreaterThan(Self.artworkPixelFraction(app, fallback: true, region: artwork), 0.01,
+                                 "Expected fallback artwork in details for image response \(imageResponse)")
+            app.navigationBars.buttons.firstMatch.tap()
+            XCTAssertTrue(card.waitForExistence(timeout: 5))
+            XCTAssertGreaterThan(Self.artworkPixelFraction(card, fallback: true,
+                                 region: CGRect(x: 16, y: 16, width: card.frame.width - 32, height: 160)), 0.01)
             app.terminate()
         }
     }
 
-    private static func greenFraction(_ image: UIImage, fallback: Bool = false) -> Double {
-        guard var source = image.cgImage else { return 0 }
-        if fallback {
-            // Inspect only the artwork, excluding the card's title and event-type text.
-            source = source.cropping(to: CGRect(x: 0, y: 0, width: source.width,
-                                                height: Int(Double(source.width) * 0.42)))!
+    private static func artworkPixelFraction(_ element: XCUIElement, fallback: Bool = false, region: CGRect? = nil) -> Double {
+        guard var source = element.screenshot().image.cgImage else { return 0 }
+        if let region {
+            // Crop the artwork so text and navigation cannot satisfy the visual assertion.
+            let scale = CGFloat(source.width) / element.frame.width
+            guard let cropped = source.cropping(to: region.applying(CGAffineTransform(scaleX: scale, y: scale))) else { return 0 }
+            source = cropped
         }
         let width = source.width, height = source.height
         var pixels = [UInt8](repeating: 0, count: width * height * 4)
@@ -278,6 +291,7 @@ final class DiscoveryUITests: XCTestCase {
     }
 
     private func launch(routes: [[String: Any]], places: [[String: Any]] = []) -> XCUIApplication {
+        XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         let script = try! JSONSerialization.data(withJSONObject: routes)
