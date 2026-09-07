@@ -17,6 +17,7 @@ final class UITestHTTPService {
 
     private struct Response: Decodable {
         let status: Int
+        var delaySeconds: Double?
         var body: String?
         var bodyBase64: String?
     }
@@ -41,6 +42,9 @@ final class UITestHTTPService {
         if let index, let first = routes[index].responses.first {
             response = first
             if routes[index].responses.count > 1 { routes[index].responses.removeFirst() }
+        }
+        if let delay = response.delaySeconds {
+            try await Task.sleep(for: .seconds(delay))
         }
         try Task.checkCancellation()
         let data = response.bodyBase64.flatMap { Data(base64Encoded: $0) } ?? Data((response.body ?? "").utf8)
