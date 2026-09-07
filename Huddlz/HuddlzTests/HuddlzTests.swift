@@ -4,6 +4,22 @@ import Testing
 
 @MainActor
 struct DiscoveryBehaviorTests {
+    @Test("An invalid image URL does not hide an otherwise readable huddl")
+    func invalidImageDoesNotHideEvent() async throws {
+        let event = HTTPFixture.coffee.replacingOccurrences(of: "\"thumbnail_url\":null",
+                                                          with: "\"thumbnail_url\":\"https://[\"")
+        let client = DiscoveryClient { request in
+            let body = request.url?.path == "/api/json/huddlz/coffee"
+                ? "{\"data\":\(event)}" : HTTPFixture.page([event])
+            return HTTPFixture.response(request, body: body)
+        }
+        let discovery = DiscoveryStore(client: client)
+        await discovery.search(DiscoveryQuery())
+        #expect(discovery.huddlz.map(\.title) == ["Coffee with neighbors"])
+        #expect(discovery.errorMessage == nil)
+        let detail = try await client.detail(id: "coffee")
+        #expect(detail.title == "Coffee with neighbors")
+    }
     @Test("Choosing a place finds nearby huddlz without losing the other filters")
     func choosingPlacePreservesFilters() async {
         let client = DiscoveryClient { request in
