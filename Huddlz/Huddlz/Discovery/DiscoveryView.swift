@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DiscoveryView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @State private var isShowingAccount = false
     @State private var store = DiscoveryStore()
     @State private var searchText = ""
     @State private var query = DiscoveryQuery()
@@ -16,6 +17,7 @@ struct DiscoveryView: View {
         .onChange(of: searchText) { _, value in
             if value.isEmpty { query.text = "" }
         }
+        .sheet(isPresented: $isShowingAccount) { AccountView() }
         .sheet(isPresented: $isChoosingLocation) {
             LocationSearchView(place: $query.place)
         }
@@ -24,11 +26,20 @@ struct DiscoveryView: View {
     private var discoveryContent: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Find your people.")
-                        .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                    Text("Find a huddl worth showing up to.")
-                        .foregroundStyle(.secondary)
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Find your people.")
+                            .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                        Text("Find a huddl worth showing up to.")
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 8)
+                    Button { isShowingAccount = true } label: {
+                        Image(systemName: "person.crop.circle")
+                            .font(.title2)
+                            .frame(width: 44, height: 44)
+                    }
+                    .accessibilityLabel("Account")
                 }
                 locationFilter
                 filters

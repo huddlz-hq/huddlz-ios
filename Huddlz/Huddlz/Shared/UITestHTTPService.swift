@@ -35,7 +35,15 @@ final class UITestHTTPService {
         let parameters = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         let index = routes.firstIndex { route in
             route.path == url.path && route.query.allSatisfy { key, value in
-                parameters.contains { $0.name == key && $0.value == value }
+                parameters.contains { parameter in
+                    guard parameter.name == key else { return false }
+                    if key == "search_latitude" || key == "search_longitude",
+                       let actual = parameter.value.flatMap(Double.init), let expected = Double(value) {
+                        // Core Location can introduce floating-point rounding during simulation.
+                        return abs(actual - expected) < 0.00000001
+                    }
+                    return parameter.value == value
+                }
             }
         }
         var response = Response(status: 500, body: "{\"errors\":[{\"detail\":\"No matching UI test response\"}]}")
