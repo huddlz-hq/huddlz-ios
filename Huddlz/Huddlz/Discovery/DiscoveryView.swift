@@ -40,6 +40,7 @@ struct DiscoveryView: View {
             .frame(maxWidth: .infinity)
         }
         .background(HuddlStyle.background)
+        .modifier(PullRefreshFeedback(isRefreshing: store.isRefreshing))
         .toolbar(horizontalSizeClass == .compact ? .hidden : .automatic, for: .navigationBar)
         .task(id: query) { await store.search(query) }
         .task(id: reload) {
@@ -176,5 +177,59 @@ struct DiscoveryView: View {
                 }
             }
         }
+    }
+}
+
+private struct PullRefreshFeedback: ViewModifier {
+    let isRefreshing: Bool
+    @State private var pullDistance: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                max(0, -geometry.contentOffset.y - geometry.contentInsets.top)
+            } action: { _, distance in
+                pullDistance = distance
+            }
+            .overlay(alignment: .top) {
+                PullRefreshIndicator(distance: pullDistance, isRefreshing: isRefreshing)
+                    .padding(.top, 8)
+                    .allowsHitTesting(false)
+            }
+    }
+}
+
+private struct PullRefreshIndicator: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let distance: CGFloat
+    let isRefreshing: Bool
+
+    private var progress: CGFloat { min(distance / 80, 1) }
+    private var isVisible: Bool { distance > 12 || isRefreshing }
+
+    var body: some View {
+        ZStack {
+            if isRefreshing {
+                ProgressView().tint(HuddlStyle.accent)
+            } else {
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(HuddlStyle.accent, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .frame(width: 24, height: 24)
+                Image(systemName: "arrow.down")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(HuddlStyle.accent)
+                    .rotationEffect(.degrees(reduceMotion ? 0 : 180 * progress))
+            }
+        }
+        .frame(width: 40, height: 40)
+        .background(.regularMaterial, in: .circle)
+        .scaleEffect(reduceMotion || isRefreshing ? 1 : 0.7 + 0.3 * progress)
+        .opacity(isVisible ? 1 : 0)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: isVisible)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(isRefreshing ? "Refreshing huddlz" : "Pull to refresh")
+        .accessibilityHidden(!isVisible)
     }
 }
