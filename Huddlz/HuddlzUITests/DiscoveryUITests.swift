@@ -7,10 +7,10 @@ final class DiscoveryUITests: XCTestCase {
     func testEventImageAppearsInItsCardAndDetails() {
         let illustrated = coffee.replacingOccurrences(of: "\"thumbnail_url\":null",
                                                      with: "\"thumbnail_url\":null,\"image_url\":\"https://images.example.test/coffee.png\"")
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 80, height: 80))
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 160, height: 90))
         let png = renderer.pngData { context in
             UIColor.green.setFill()
-            context.fill(CGRect(x: 0, y: 0, width: 80, height: 80))
+            context.fill(CGRect(x: 0, y: 0, width: 160, height: 90))
         }
         let app = launch(routes: [
             route(body: page([illustrated])),
@@ -21,13 +21,15 @@ final class DiscoveryUITests: XCTestCase {
         let card = app.buttons["huddl-coffee"]
         XCTAssertTrue(card.waitForExistence(timeout: 5))
         let cardImage = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            Self.artworkPixelFraction(card) > 0.1
+            Self.artworkPixelFraction(card, region: CGRect(x: 16, y: 16,
+                width: card.frame.width - 32, height: (card.frame.width - 32) * 9 / 16)) > 0.9
         }, object: nil)
         XCTAssertEqual(XCTWaiter.wait(for: [cardImage], timeout: 8), .completed)
         card.tap()
         XCTAssertTrue(app.staticTexts["About this huddl"].waitForExistence(timeout: 5))
         let detailImage = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            Self.artworkPixelFraction(app) > 0.03
+            Self.artworkPixelFraction(app, region: CGRect(x: 20, y: app.navigationBars.firstMatch.frame.maxY + 20,
+                width: app.frame.width - 40, height: (app.frame.width - 40) * 9 / 16)) > 0.9
         }, object: nil)
         XCTAssertEqual(XCTWaiter.wait(for: [detailImage], timeout: 8), .completed)
     }
@@ -47,18 +49,18 @@ final class DiscoveryUITests: XCTestCase {
             attachment.name = "Fallback for image response \(imageResponse)"
             attachment.lifetime = .keepAlways
             add(attachment)
-            XCTAssertGreaterThan(Self.artworkPixelFraction(card, fallback: true, region: CGRect(x: 16, y: 16, width: card.frame.width - 32, height: 160)), 0.01,
+            XCTAssertGreaterThan(Self.artworkPixelFraction(card, fallback: true, region: CGRect(x: 16, y: 16, width: card.frame.width - 32, height: (card.frame.width - 32) * 9 / 16)), 0.01,
                                  "Expected the event-type illustration for image response \(imageResponse)")
             card.tap()
             XCTAssertTrue(app.staticTexts["Bring a mug and meet your neighbors."].waitForExistence(timeout: 5))
             let artwork = CGRect(x: 20, y: app.navigationBars.firstMatch.frame.maxY + 20,
-                                 width: app.frame.width - 40, height: 160)
+                                 width: app.frame.width - 40, height: (app.frame.width - 40) * 9 / 16)
             XCTAssertGreaterThan(Self.artworkPixelFraction(app, fallback: true, region: artwork), 0.01,
                                  "Expected fallback artwork in details for image response \(imageResponse)")
             app.navigationBars.buttons.firstMatch.tap()
             XCTAssertTrue(card.waitForExistence(timeout: 5))
             XCTAssertGreaterThan(Self.artworkPixelFraction(card, fallback: true,
-                                 region: CGRect(x: 16, y: 16, width: card.frame.width - 32, height: 160)), 0.01)
+                                 region: CGRect(x: 16, y: 16, width: card.frame.width - 32, height: (card.frame.width - 32) * 9 / 16)), 0.01)
             app.terminate()
         }
     }

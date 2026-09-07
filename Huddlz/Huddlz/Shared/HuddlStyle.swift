@@ -10,21 +10,22 @@ struct HuddlArtwork: View {
     let huddl: Huddl
 
     var body: some View {
-        AsyncImage(url: huddl.imageURL) { image in
-            image.resizable().scaledToFill()
-        } placeholder: {
-            ZStack {
-                HuddlStyle.accent.opacity(0.10)
-                Image(systemName: huddl.attributes.eventType.symbol)
-                    .font(.system(size: 58, weight: .medium))
-                    .foregroundStyle(HuddlStyle.accent)
+        Color.clear
+            .aspectRatio(16 / 9, contentMode: .fit)
+            .overlay {
+                AsyncImage(url: huddl.imageURL) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    ZStack {
+                        HuddlStyle.accent.opacity(0.10)
+                        Image(systemName: huddl.attributes.eventType.symbol)
+                            .font(.system(size: 58, weight: .medium))
+                            .foregroundStyle(HuddlStyle.accent)
+                    }
+                }
             }
-        }
-        .frame(height: 160)
-        .frame(maxWidth: .infinity)
-        .clipped()
-        .clipShape(.rect(cornerRadius: 24))
-        .accessibilityHidden(true)
+            .clipShape(.rect(cornerRadius: 24))
+            .accessibilityHidden(true)
     }
 }
 
