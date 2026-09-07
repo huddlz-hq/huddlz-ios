@@ -12,8 +12,6 @@ struct DiscoveryView: View {
         NavigationStack {
             discoveryContent
         }
-        .searchable(text: $searchText, prompt: "Search huddlz")
-        .onSubmit(of: .search) { query.text = searchText }
         .onChange(of: searchText) { _, value in
             if value.isEmpty { query.text = "" }
         }
@@ -45,6 +43,13 @@ struct DiscoveryView: View {
         .task(id: reload) {
             // The initial request is owned by the query task.
             if didRequestRetry { await store.search(query) }
+        }
+        .safeAreaInset(edge: .bottom) {
+            DiscoverySearchBar(text: $searchText) { query.text = searchText }
+                .frame(height: 56)
+                .padding(.horizontal, 12)
+                .padding(.bottom, 8)
+                .background(.bar)
         }
         .refreshable { await store.refresh(query) }
         .navigationDestination(for: Huddl.ID.self) { HuddlDetailView(id: $0) }

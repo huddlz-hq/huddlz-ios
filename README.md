@@ -31,7 +31,7 @@ Keep new code grouped by feature as features are added. Add shared UI and networ
 
 ## Public discovery
 
-Browse real huddlz in cards, submit text with the keyboard’s Search action, and filter by event type (all, in person, online, hybrid) and date (all upcoming, this week, this month). Clear the search field to reset the text query. Pull to refresh while keeping the current cards visible. A failed refresh keeps the cards and filters and offers retry. Use Load more when another API page is available. Opening a card fetches current details separately. Event times display in the event’s time zone.
+Browse real huddlz in cards, submit text with the keyboard’s Search action, and filter by event type (all, in person, online, hybrid) and date (all upcoming, this week, this month). Clear the search field to reset the text query. Pull to refresh while keeping the current cards visible. A failed refresh keeps the cards and filters and offers retry. Bottom search uses a native UIKit search bar: in this layout on iOS 26.5, SwiftUI’s searchable integration detaches the refresh control. Keeping search separate preserves native pull-to-refresh feedback. Use Load more when another API page is available. Opening a card fetches current details separately. Event times display in the event’s time zone.
 
 Choose Anywhere to search for a city or postal code with Apple Maps. Select a place, then choose a distance of 5, 10, 25, 50, or 100 miles. Clear location returns to browsing anywhere and keeps the event search and filters. Place searches run when submitted. Use current location requests location access only after you choose that action, then uses a single fix to find nearby huddlz. Denied access or an unavailable location leaves manual place search available. Leaving the picker cancels a pending lookup.
 
@@ -52,7 +52,7 @@ Use Command-U in Xcode to run the suite. `HuddlzTests` exercises discovery throu
 
 UI tests pass a response script through `HUDDLZ_UI_HTTP_SCRIPT`. The debug build uses it only at the HTTP boundary; requests, decoding, state, and views remain real. A missing or invalid scripted response fails locally instead of contacting production. Release builds exclude this hook.
 
-Timing tests hold and release responses explicitly, so cancellation and overlapping searches do not depend on sleeps. Refresh tests cover retained cards, failure, cancellation, and a newer search superseding a pending refresh. A native pull gesture verifies visible cards, preserved filters, and retry after failure. Keep live API smoke checks separate from this deterministic suite.
+State timing tests hold and release responses explicitly, so cancellation and overlapping searches do not depend on sleeps. Refresh tests cover retained cards, failure, cancellation, and a newer search superseding a pending refresh. A native pull gesture verifies visible cards, preserved filters, and retry after failure. A visual test delays the HTTP response and captures the native spinner during refresh; restoring the conflicting search integration makes this test fail. Keep live API smoke checks separate from this deterministic suite.
 
 Artwork tests send PNG bytes through an HTTP fixture and verify visible image pixels in cards and details. Missing images, failed requests, and unreadable image data retain the event-type illustration. A malformed image URL does not prevent the event from loading.
 

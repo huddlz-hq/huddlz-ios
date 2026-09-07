@@ -1,9 +1,57 @@
 import XCTest
 import CoreLocation
+import Synchronization
 
 @MainActor
 final class DiscoveryUITests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
+
+    func testPullToRefreshShowsNativeProgressAndKeepsSearchAvailable() {
+        let app = launch(routes: [[
+            "path": "/api/json/huddlz", "query": [:],
+            "responses": [["status": 200, "body": page([coffee])],
+                          ["status": 200, "body": page([hike]), "delaySeconds": 8]]
+        ]])
+        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
+        let heading = app.staticTexts["Find your people."].frame
+        // This strip above the resting heading is blank unless the native spinner appears.
+        let region = CGRect(x: app.frame.midX - 22, y: heading.minY - 22, width: 44, height: 22)
+        let captured = Mutex<Data?>(nil)
+        let captureFinished = expectation(description: "Capture native refresh feedback")
+        // The drag waits for native animations to finish. Capture the screen during the request.
+        DispatchQueue.global().asyncAfter(deadline: .now() + 4) {
+            let data = XCUIScreen.main.screenshot().pngRepresentation
+            captured.withLock { $0 = data }
+            captureFinished.fulfill()
+        }
+        let scroll = app.scrollViews.firstMatch
+        scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12))
+            .press(forDuration: 0.1, thenDragTo: scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85)))
+        wait(for: [captureFinished], timeout: 12)
+        let data = captured.withLock { $0 }!
+        let screenshot = UIImage(data: data)!
+        let attachment = XCTAttachment(image: screenshot)
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        let scale = CGFloat(screenshot.cgImage!.width) / app.frame.width
+        let crop = screenshot.cgImage!.cropping(to: region.applying(CGAffineTransform(scaleX: scale, y: scale)))!
+        var pixels = [UInt8](repeating: 0, count: crop.width * crop.height * 4)
+        pixels.withUnsafeMutableBytes { bytes in
+            let context = CGContext(data: bytes.baseAddress, width: crop.width, height: crop.height,
+                                    bitsPerComponent: 8, bytesPerRow: crop.width * 4,
+                                    space: CGColorSpaceCreateDeviceRGB(),
+                                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+            context.draw(crop, in: CGRect(x: 0, y: 0, width: crop.width, height: crop.height))
+        }
+        var brightness: [Int] = []
+        for index in stride(from: 0, to: pixels.count, by: 4) {
+            let value = Int(pixels[index]) + Int(pixels[index + 1]) + Int(pixels[index + 2])
+            brightness.append(value)
+        }
+        XCTAssertGreaterThan(brightness.max()! - brightness.min()!, 30, "The native spinner must be visible above the heading")
+        XCTAssertTrue(app.buttons["huddl-hike"].waitForExistence(timeout: 12))
+        XCTAssertTrue(app.searchFields.firstMatch.exists)
+    }
 
     func testFailedRefreshKeepsCardsAndFiltersAndCanBeRetried() {
         let filtered: [String: Any] = [
@@ -314,6 +362,7 @@ final class DiscoveryUITests: XCTestCase {
         app.buttons["huddl-coffee"].tap()
 
         XCTAssertTrue(app.staticTexts["Coffee with neighbors — updated"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.searchFields.firstMatch.exists)
         XCTAssertTrue(app.staticTexts["Bring a mug and meet your neighbors."].exists)
         XCTAssertTrue(app.staticTexts["Juniper Café"].exists)
         XCTAssertTrue(app.staticTexts["America/New_York"].exists)
@@ -323,6 +372,9 @@ final class DiscoveryUITests: XCTestCase {
         XCTAssertTrue(start.label.contains("9:00"))
         XCTAssertTrue(end.label.contains("Sep 11, 2026"))
         XCTAssertTrue(end.label.contains("12:00"))
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.searchFields.firstMatch.value as? String, "coffee")
     }
 
     func testClearingAnEmptySearchRestoresDiscovery() {
