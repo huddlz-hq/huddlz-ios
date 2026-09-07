@@ -4,6 +4,64 @@ import Testing
 
 @MainActor
 struct DiscoveryBehaviorTests {
+    @Test("Refresh keeps cards until success and preserves them on failure or cancellation", arguments: [200, 503, -1])
+    func refreshKeepsCards(status: Int) async {
+        let pending = PendingHTTPResponse()
+        let next = "https://huddlz.com/api/json/huddlz?page%5Bafter%5D=coffee"
+        var attempts = 0
+        let query = DiscoveryQuery(text: "coffee", dates: .thisWeek, eventType: .inPerson)
+        let client = DiscoveryClient { request in
+            #expect(HTTPFixture.parameters(request)["query"] == "coffee")
+            #expect(HTTPFixture.parameters(request)["date_filter"] == "this_week")
+            #expect(HTTPFixture.parameters(request)["event_type"] == "in_person")
+            attempts += 1
+            if attempts > 1 { return try await pending.fetch(request) }
+            return HTTPFixture.response(request, body: HTTPFixture.page([HTTPFixture.coffee], next: next))
+        }
+        let discovery = DiscoveryStore(client: client)
+        await discovery.search(query)
+        let refresh = Task { await discovery.refresh(query) }
+        await pending.waitUntilRequested()
+        #expect(discovery.huddlz.map(\.id) == ["coffee"])
+        #expect(!discovery.isLoading)
+        #expect(discovery.isRefreshing)
+
+        if status == -1 { refresh.cancel() }
+        pending.finish(body: HTTPFixture.page([HTTPFixture.hike]), status: status == -1 ? 200 : status)
+        await refresh.value
+        #expect(discovery.huddlz.map(\.id) == (status == 200 ? ["hike"] : ["coffee"]))
+        #expect(discovery.nextPage?.absoluteString == (status == 200 ? nil : next))
+        #expect(!discovery.isRefreshing)
+        #expect((discovery.refreshError != nil) == (status == 503))
+        #expect(discovery.errorMessage == nil)
+    }
+
+    @Test("An older refresh cannot replace a newer search or show its error", arguments: [200, 503])
+    func olderRefreshCannotReplaceNewSearch(status: Int) async {
+        let pending = PendingHTTPResponse()
+        var coffeeRequests = 0
+        let client = DiscoveryClient { request in
+            if HTTPFixture.parameters(request)["query"] == "hike" {
+                return HTTPFixture.response(request, body: HTTPFixture.page([HTTPFixture.hike]))
+            }
+            coffeeRequests += 1
+            if coffeeRequests > 1 { return try await pending.fetch(request) }
+            return HTTPFixture.response(request, body: HTTPFixture.page([HTTPFixture.coffee]))
+        }
+        let discovery = DiscoveryStore(client: client)
+        await discovery.search(DiscoveryQuery(text: "coffee"))
+        let refresh = Task { await discovery.refresh(DiscoveryQuery(text: "coffee")) }
+        await pending.waitUntilRequested()
+        await discovery.search(DiscoveryQuery(text: "hike"))
+        pending.finish(body: HTTPFixture.page([HTTPFixture.coffee]), status: status)
+        await refresh.value
+
+        #expect(discovery.huddlz.map(\.id) == ["hike"])
+        #expect(discovery.refreshError == nil)
+        #expect(discovery.errorMessage == nil)
+        #expect(!discovery.isRefreshing)
+    }
+
     @Test("An invalid image URL does not hide an otherwise readable huddl")
     func invalidImageDoesNotHideEvent() async throws {
         let event = HTTPFixture.coffee.replacingOccurrences(of: "\"thumbnail_url\":null",

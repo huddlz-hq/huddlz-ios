@@ -5,6 +5,38 @@ import CoreLocation
 final class DiscoveryUITests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
 
+    func testFailedRefreshKeepsCardsAndFiltersAndCanBeRetried() {
+        let filtered: [String: Any] = [
+            "path": "/api/json/huddlz",
+            "query": ["query": "coffee", "date_filter": "this_week", "event_type": "in_person"],
+            "responses": [["status": 200, "body": page([coffee])],
+                          ["status": 503, "body": "{}"],
+                          ["status": 200, "body": page([hike])]]
+        ]
+        let app = launch(routes: [filtered, route(body: page([hike]))])
+        XCTAssertTrue(app.buttons["huddl-hike"].waitForExistence(timeout: 5))
+        app.searchFields.firstMatch.tap()
+        app.searchFields.firstMatch.typeText("coffee\n")
+        app.buttons["When: All upcoming"].tap()
+        app.buttons["This week"].tap()
+        app.buttons["Event type: All types"].tap()
+        app.buttons["In person"].tap()
+        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
+
+        let scroll = app.scrollViews.firstMatch
+        scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2))
+            .press(forDuration: 0.1, thenDragTo: scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85)))
+        XCTAssertTrue(app.buttons["huddl-coffee"].exists)
+        XCTAssertTrue(app.staticTexts["Couldn’t refresh huddlz."].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.searchFields.firstMatch.value as? String, "coffee")
+        XCTAssertTrue(app.buttons["When: This week"].exists)
+        XCTAssertTrue(app.buttons["Event type: In person"].exists)
+        app.buttons["Try refreshing again"].tap()
+        XCTAssertTrue(app.buttons["huddl-hike"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["huddl-coffee"].exists)
+        XCTAssertFalse(app.staticTexts["Couldn’t refresh huddlz."].exists)
+    }
+
     func testCurrentLocationFindsNearbyHuddlzOnlyWhenRequestedAndKeepsFilters() {
         XCUIDevice.shared.location = XCUILocation(location: CLLocation(latitude: 29.9012, longitude: -81.3124))
         defer { XCUIDevice.shared.location = nil }
