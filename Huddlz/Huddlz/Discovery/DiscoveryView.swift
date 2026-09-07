@@ -1,12 +1,24 @@
 import SwiftUI
 
 struct DiscoveryView: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var store = DiscoveryStore()
     @State private var searchText = ""
     @State private var query = DiscoveryQuery()
     @State private var reload = UUID()
 
     var body: some View {
+        NavigationStack {
+            discoveryContent
+        }
+        .searchable(text: $searchText, prompt: "Search huddlz")
+        .onSubmit(of: .search) { query.text = searchText }
+        .onChange(of: searchText) { _, value in
+            if value.isEmpty { query.text = "" }
+        }
+    }
+
+    private var discoveryContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 VStack(alignment: .leading, spacing: 8) {
@@ -23,13 +35,7 @@ struct DiscoveryView: View {
             .frame(maxWidth: .infinity)
         }
         .background(HuddlStyle.background)
-        .navigationTitle("Huddlz")
-        .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search huddlz")
-        .onSubmit(of: .search) { query.text = searchText }
-        .onChange(of: searchText) { _, value in
-            if value.isEmpty { query.text = "" }
-        }
+        .toolbar(horizontalSizeClass == .compact ? .hidden : .automatic, for: .navigationBar)
         .task(id: query) { await store.search(query) }
         .task(id: reload) {
             // The initial request is owned by the query task.

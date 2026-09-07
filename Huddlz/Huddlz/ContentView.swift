@@ -2,10 +2,8 @@ import SwiftUI
 
 struct ContentView: View {
     var body: some View {
-        NavigationStack {
-            DiscoveryView()
-        }
-        .tint(HuddlStyle.accent)
+        DiscoveryView()
+            .tint(HuddlStyle.accent)
     }
 }
 
