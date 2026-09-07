@@ -48,6 +48,12 @@ Schema: https://huddlz.com/api/json/open_api; browser docs: https://huddlz.com/a
 
 Design reference: `prototype/issue-1-core-journey`, variant A (cards). The prototype and simulated account/RSVP flow remain on that branch.
 
+## Accounts
+
+Open Account from discovery to sign in with an existing Huddlz account. Successful sign-in returns to the current search and filters. Account shows the signed-in name and email and offers sign-out. Registration, password reset, authenticated RSVP, and profile editing remain follow-up work under #3–#5.
+
+Authentication uses the dedicated JSON endpoints `POST /api/auth/sign_in`, `GET /api/auth/me`, and `DELETE /api/auth/sign_out`. Requests are cookie-free and do not follow redirects. Only the bearer token is saved, using device-only Keychain storage accessible while unlocked. Passwords are cleared from the form after submission. The app checks a saved session on launch and when it returns to the foreground; expired sessions are removed, while temporary failures offer retry. Sign-out removes the local token before attempting server revocation, with clear feedback if the server cannot be reached. Public discovery remains available without an account.
+
 ## Behavior tests
 
 Use Command-U in Xcode to run the suite. `HuddlzTests` exercises discovery through its public interface with controlled HTTP responses. `DiscoveryUITests` drives search, filters, details, empty states, and retry in Simulator. Test names describe the behavior they protect.
@@ -57,6 +63,8 @@ UI tests pass a response script through `HUDDLZ_UI_HTTP_SCRIPT`. The debug build
 State timing tests hold and release responses explicitly, so cancellation and overlapping searches do not depend on sleeps. Refresh tests cover retained cards, failure, cancellation, and a newer search superseding a pending refresh. A native pull gesture verifies visible cards, preserved filters, and retry after failure. A visual test delays the HTTP response and captures the native spinner during refresh; restoring the conflicting search integration makes this test fail. Keep live API smoke checks separate from this deterministic suite.
 
 Pagination tests scroll through real cards and verify bottom progress, stable scroll position, explicit retry, and continued loading through a repeated batch. State tests cover overlapping requests, the final batch, and old responses arriving after a new search. Pagination observes refresh state in its own footer view; observing it in the view that owns refresh hid the native spinner on iOS 26.5. Discovery uses one lazy stack; nesting it inside a regular stack caused scrolling to hang during layout on iOS 26.5.
+
+Account tests use real Keychain entries with unique test service names, plus HTTP fixtures for the authentication endpoints. UI tests sign in, relaunch, sign out, and retry incorrect credentials; successful test journeys sign out to remove their saved token. State tests verify credentials and bearer headers, session expiry, retry after transient failures, and local sign-out when server revocation fails. Test-session namespaces are excluded from Release builds and never read the normal app session.
 
 Artwork tests send PNG bytes through an HTTP fixture and verify visible image pixels in cards and details. Missing images, failed requests, and unreadable image data retain the event-type illustration. A malformed image URL does not prevent the event from loading.
 
@@ -71,6 +79,8 @@ Current-location UI tests use Apple’s simulated device location and real syste
 ## Continuous integration
 
 GitHub Actions runs the full native test suite for pull requests into main and pushes to main. You can also start it from Actions → iOS tests → Run workflow.
+
+Simulator builds use ad-hoc signing so tests can exercise the real Keychain. Disabling signing prevents Keychain access; no signing certificates or developer team are required for these simulator tests.
 
 The workflow uses Xcode 26.6 and an iPhone 17 simulator running iOS 26.5 on a macOS 26 runner. It uses the shared Huddlz scheme and requires no signing certificates or production credentials. Runner availability is listed in [GitHub’s macOS image documentation](https://github.com/actions/runner-images/blob/main/images/macos/macos-26-Readme.md).
 

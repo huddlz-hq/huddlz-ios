@@ -41,7 +41,7 @@ jobs:
             -parallel-testing-enabled NO \
             -derivedDataPath "$RUNNER_TEMP/HuddlzDerivedData" \
             -resultBundlePath "$RUNNER_TEMP/HuddlzTests.xcresult" \
-            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
             2>&1 | tee "$RUNNER_TEMP/xcodebuild.log"
 
       - name: Save test results
