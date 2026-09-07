@@ -6,7 +6,9 @@ import Observation
 final class DiscoveryStore {
     private(set) var huddlz: [Huddl] = []
     private(set) var isLoading = false
+    private(set) var isRefreshing = false
     private(set) var errorMessage: String?
+    private(set) var refreshError: String?
     private(set) var isLoadingMore = false
     private(set) var moreError: String?
     private(set) var nextPage: URL?
@@ -20,10 +22,12 @@ final class DiscoveryStore {
         let request = UUID()
         revision = request
         isLoading = true
+        isRefreshing = false
         isLoadingMore = false
         huddlz = []
         nextPage = nil
         errorMessage = nil
+        refreshError = nil
         moreError = nil
         defer { if request == revision { isLoading = false } }
         do {
@@ -37,8 +41,29 @@ final class DiscoveryStore {
         }
     }
 
+    func refresh(_ query: DiscoveryQuery) async {
+        guard !isLoading, !isRefreshing else { return }
+        let request = UUID()
+        revision = request
+        isRefreshing = true
+        isLoadingMore = false
+        defer { if request == revision { isRefreshing = false } }
+        do {
+            let page = try await client.search(query)
+            guard request == revision, !Task.isCancelled else { return }
+            huddlz = page.huddlz
+            nextPage = page.next
+            errorMessage = nil
+            refreshError = nil
+            moreError = nil
+        } catch {
+            guard request == revision, !Task.isCancelled else { return }
+            refreshError = error.localizedDescription
+        }
+    }
+
     func loadMore() async {
-        guard !isLoading, !isLoadingMore, let url = nextPage else { return }
+        guard !isLoading, !isRefreshing, !isLoadingMore, let url = nextPage else { return }
         let request = revision
         isLoadingMore = true
         moreError = nil

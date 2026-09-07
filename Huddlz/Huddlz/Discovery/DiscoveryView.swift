@@ -46,7 +46,7 @@ struct DiscoveryView: View {
             // The initial request is owned by the query task.
             if didRequestRetry { await store.search(query) }
         }
-        .refreshable { await store.search(query) }
+        .refreshable { await store.refresh(query) }
         .navigationDestination(for: Huddl.ID.self) { HuddlDetailView(id: $0) }
     }
 
@@ -114,6 +114,21 @@ struct DiscoveryView: View {
     }
 
     @ViewBuilder private var results: some View {
+        if let message = store.refreshError {
+            VStack(spacing: 8) {
+                if store.isRefreshing {
+                    ProgressView("Refreshing huddlz…")
+                } else {
+                    Text("Couldn’t refresh huddlz.").font(.headline)
+                    Text(message).foregroundStyle(.secondary)
+                    Button("Try refreshing again") {
+                        Task { await store.refresh(query) }
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+            .frame(maxWidth: .infinity)
+        }
         if store.isLoading {
             ProgressView("Finding huddlz…")
                 .frame(maxWidth: .infinity, minHeight: 180)
@@ -157,7 +172,7 @@ struct DiscoveryView: View {
                         else { Text(store.moreError == nil ? "Load more huddlz" : "Try loading more again") }
                     }
                     .buttonStyle(.bordered)
-                    .disabled(store.isLoadingMore)
+                    .disabled(store.isLoadingMore || store.isRefreshing)
                 }
             }
         }
