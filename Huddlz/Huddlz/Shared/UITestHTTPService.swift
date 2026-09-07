@@ -17,17 +17,8 @@ final class UITestHTTPService {
 
     private struct Response: Decodable {
         let status: Int
-        var body: String = ""
+        var body: String?
         var bodyBase64: String?
-
-        enum CodingKeys: String, CodingKey { case status, body, bodyBase64 }
-        init(status: Int, body: String) { self.status = status; self.body = body }
-        init(from decoder: Decoder) throws {
-            let values = try decoder.container(keyedBy: CodingKeys.self)
-            status = try values.decode(Int.self, forKey: .status)
-            body = try values.decodeIfPresent(String.self, forKey: .body) ?? ""
-            bodyBase64 = try values.decodeIfPresent(String.self, forKey: .bodyBase64)
-        }
     }
 
     private var routes: [Route]
@@ -52,7 +43,7 @@ final class UITestHTTPService {
             if routes[index].responses.count > 1 { routes[index].responses.removeFirst() }
         }
         try Task.checkCancellation()
-        let data = response.bodyBase64.flatMap { Data(base64Encoded: $0) } ?? Data(response.body.utf8)
+        let data = response.bodyBase64.flatMap { Data(base64Encoded: $0) } ?? Data((response.body ?? "").utf8)
         return (data, HTTPURLResponse(url: url, statusCode: response.status,
                                                        httpVersion: nil, headerFields: nil)!)
     }
