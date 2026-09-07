@@ -50,3 +50,11 @@ Use Command-U in Xcode to run the suite. `HuddlzTests` exercises discovery throu
 UI tests pass a response script through `HUDDLZ_UI_HTTP_SCRIPT`. The debug build uses it only at the HTTP boundary; requests, decoding, state, and views remain real. A missing or invalid scripted response fails locally instead of contacting production. Release builds exclude this hook.
 
 Timing tests hold and release responses explicitly, so cancellation and overlapping searches do not depend on sleeps. Keep live API smoke checks separate from this deterministic suite.
+
+## Continuous integration
+
+GitHub Actions runs the full native test suite for pull requests into main and pushes to main. You can also start it from Actions → iOS tests → Run workflow.
+
+The workflow uses Xcode 26.6 and an iPhone 17 simulator running iOS 26.5 on a macOS 26 runner. It uses the shared Huddlz scheme and requires no signing certificates or production credentials. Runner availability is listed in [GitHub’s macOS image documentation](https://github.com/actions/runner-images/blob/main/images/macos/macos-26-Readme.md).
+
+Open the Native behavior tests check on a PR to see the logs. Each run saves an ios-test-results artifact for seven days, including the build log and an .xcresult bundle you can open in Xcode.

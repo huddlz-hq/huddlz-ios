@@ -1,0 +1,55 @@
+name: iOS tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Native behavior tests
+    runs-on: macos-26
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          xcrun simctl list devices available
+
+      - name: Run all tests
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project Huddlz/Huddlz.xcodeproj \
+            -scheme Huddlz \
+            -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' \
+            -parallel-testing-enabled NO \
+            -derivedDataPath "$RUNNER_TEMP/HuddlzDerivedData" \
+            -resultBundlePath "$RUNNER_TEMP/HuddlzTests.xcresult" \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild.log"
+
+      - name: Save test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-test-results
+          path: |
+            ${{ runner.temp }}/HuddlzTests.xcresult
+            ${{ runner.temp }}/xcodebuild.log
+          retention-days: 7
