@@ -4,6 +4,92 @@ import XCTest
 final class DiscoveryUITests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
 
+    func testChoosingAPlaceShowsNearbyResultsAndKeepsFilters() {
+        let nearby = coffee.replacingOccurrences(of: "Coffee with neighbors", with: "Nearby coffee")
+        let app = launch(routes: [
+            route(query: ["query": "coffee", "date_filter": "this_week", "event_type": "in_person",
+                          "search_latitude": "29.9012", "search_longitude": "-81.3124",
+                          "distance_miles": "25"], body: page([nearby])),
+            route(body: page([hike]))
+        ], places: [["query": "St. Augustine", "results": [
+            ["name": "St. Augustine", "address": "St. Augustine, FL, USA",
+             "latitude": 29.9012, "longitude": -81.3124, "timeZone": "America/New_York"]
+        ]]])
+        XCTAssertTrue(app.buttons["huddl-hike"].waitForExistence(timeout: 5))
+        app.searchFields.firstMatch.tap()
+        app.searchFields.firstMatch.typeText("coffee\n")
+        app.buttons["When: All upcoming"].tap()
+        app.buttons["This week"].tap()
+        app.buttons["Event type: All types"].tap()
+        app.buttons["In person"].tap()
+        app.buttons["Location: Anywhere"].tap()
+        app.textFields["City or postal code"].tap()
+        app.textFields["City or postal code"].typeText("St. Augustine\n")
+        let place = app.buttons["St. Augustine, FL, USA"]
+        XCTAssertTrue(place.waitForExistence(timeout: 5))
+        place.tap()
+        let card = app.buttons.matching(NSPredicate(format: "identifier == %@ AND label CONTAINS %@",
+                                                   "huddl-coffee", "Nearby coffee")).firstMatch
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Location: St. Augustine, FL, USA"].exists)
+        XCTAssertTrue(app.buttons["When: This week"].exists)
+        XCTAssertTrue(app.buttons["Event type: In person"].exists)
+    }
+
+    func testWideningTheDistanceFindsMoreHuddlz() {
+        let app = launch(routes: [
+            route(query: ["search_latitude": "29.9012", "search_longitude": "-81.3124",
+                          "distance_miles": "50"], body: page([coffee, hike])),
+            route(query: ["search_latitude": "29.9012", "distance_miles": "25"], body: page([coffee])),
+            route(body: page([]))
+        ], places: [["query": "St. Augustine", "results": [
+            ["name": "St. Augustine", "address": "St. Augustine, FL, USA",
+             "latitude": 29.9012, "longitude": -81.3124, "timeZone": "America/New_York"]
+        ]]])
+        app.buttons["Location: Anywhere"].tap()
+        app.textFields["City or postal code"].tap()
+        app.textFields["City or postal code"].typeText("St. Augustine\n")
+        XCTAssertTrue(app.buttons["St. Augustine, FL, USA"].waitForExistence(timeout: 5))
+        app.buttons["St. Augustine, FL, USA"].tap()
+        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["huddl-hike"].exists)
+
+        app.buttons["Distance: 25 miles"].tap()
+        app.buttons["50 miles"].tap()
+
+        XCTAssertTrue(app.buttons["huddl-hike"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["huddl-coffee"].exists)
+        XCTAssertTrue(app.buttons["Distance: 50 miles"].exists)
+    }
+
+    func testClearingLocationRecoversFromNoNearbyHuddlzAndKeepsSearch() {
+        let app = launch(routes: [
+            route(query: ["search_latitude": "29.9012"], body: page([])),
+            route(query: ["query": "coffee"], body: page([coffee])),
+            route(body: page([hike]))
+        ], places: [["query": "St. Augustine", "results": [
+            ["name": "St. Augustine", "address": "St. Augustine, FL, USA",
+             "latitude": 29.9012, "longitude": -81.3124, "timeZone": "America/New_York"]
+        ]]])
+        app.searchFields.firstMatch.tap()
+        app.searchFields.firstMatch.typeText("coffee\n")
+        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
+        app.buttons["Location: Anywhere"].tap()
+        app.textFields["City or postal code"].tap()
+        app.textFields["City or postal code"].typeText("St. Augustine\n")
+        XCTAssertTrue(app.buttons["St. Augustine, FL, USA"].waitForExistence(timeout: 5))
+        app.buttons["St. Augustine, FL, USA"].tap()
+        XCTAssertTrue(app.staticTexts["No huddlz found"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Try a wider distance, another place, or different search filters."].exists)
+
+        app.buttons["Clear location"].tap()
+
+        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["huddl-hike"].exists)
+        XCTAssertTrue(app.buttons["Location: Anywhere"].exists)
+        XCTAssertFalse(app.buttons["Distance: 25 miles"].exists)
+    }
+
     func testSearchingAndOpeningACardShowsCurrentDetailsWithoutSignIn() throws {
         let updated = coffee.replacingOccurrences(of: "Coffee with neighbors", with: "Coffee with neighbors — updated")
             .replacingOccurrences(of: "2026-09-10T16:00:00Z", with: "2026-09-11T16:00:00Z")
@@ -118,11 +204,12 @@ final class DiscoveryUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Try again"].exists)
     }
 
-    private func launch(routes: [[String: Any]]) -> XCUIApplication {
+    private func launch(routes: [[String: Any]], places: [[String: Any]] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         let script = try! JSONSerialization.data(withJSONObject: routes)
         app.launchEnvironment["HUDDLZ_UI_HTTP_SCRIPT"] = String(decoding: script, as: UTF8.self)
+        app.launchEnvironment["HUDDLZ_UI_MAP_SCRIPT"] = String(decoding: try! JSONSerialization.data(withJSONObject: places), as: UTF8.self)
         app.launch()
         return app
     }

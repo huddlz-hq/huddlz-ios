@@ -35,12 +35,19 @@ struct DiscoveryClient {
         var components = URLComponents(url: baseURL.appending(path: "api/json/huddlz"), resolvingAgainstBaseURL: false)!
         components.queryItems = [
             URLQueryItem(name: "date_filter", value: query.dates.rawValue),
-            URLQueryItem(name: "search_time_zone", value: query.timeZone),
+            URLQueryItem(name: "search_time_zone", value: query.place?.timeZone ?? query.timeZone),
             URLQueryItem(name: "page[limit]", value: "20")
         ]
         let text = query.text.trimmingCharacters(in: .whitespacesAndNewlines)
         if !text.isEmpty { components.queryItems?.append(URLQueryItem(name: "query", value: text)) }
         if let type = query.eventType { components.queryItems?.append(URLQueryItem(name: "event_type", value: type.rawValue)) }
+        if let place = query.place {
+            components.queryItems?.append(contentsOf: [
+                URLQueryItem(name: "search_latitude", value: String(place.latitude)),
+                URLQueryItem(name: "search_longitude", value: String(place.longitude)),
+                URLQueryItem(name: "distance_miles", value: String(query.distanceMiles))
+            ])
+        }
         return try await page(at: components.url!)
     }
 

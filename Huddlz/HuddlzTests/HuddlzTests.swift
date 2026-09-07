@@ -4,6 +4,30 @@ import Testing
 
 @MainActor
 struct DiscoveryBehaviorTests {
+    @Test("Choosing a place finds nearby huddlz without losing the other filters")
+    func choosingPlacePreservesFilters() async {
+        let client = DiscoveryClient { request in
+            let parameters = HTTPFixture.parameters(request)
+            let matches = parameters["query"] == "coffee"
+                && parameters["date_filter"] == "this_week"
+                && parameters["event_type"] == "in_person"
+                && parameters["search_latitude"] == "29.9012"
+                && parameters["search_longitude"] == "-81.3124"
+                && parameters["distance_miles"] == "25"
+                && parameters["search_time_zone"] == "America/New_York"
+            return HTTPFixture.response(request, body: HTTPFixture.page(matches ? [HTTPFixture.coffee] : []))
+        }
+        let discovery = DiscoveryStore(client: client)
+        var query = DiscoveryQuery(text: "coffee", dates: .thisWeek, eventType: .inPerson,
+                                   timeZone: "America/Los_Angeles")
+        query.place = DiscoveryPlace(name: "St. Augustine, FL, USA", latitude: 29.9012,
+                                     longitude: -81.3124, timeZone: "America/New_York")
+
+        await discovery.search(query)
+
+        #expect(discovery.huddlz.map(\.title) == ["Coffee with neighbors"])
+        #expect(discovery.errorMessage == nil)
+    }
     @Test("Visitors can browse public huddlz without signing in")
     func browseWithoutSigningIn() async {
         let client = DiscoveryClient { request in

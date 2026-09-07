@@ -6,6 +6,7 @@ struct DiscoveryView: View {
     @State private var searchText = ""
     @State private var query = DiscoveryQuery()
     @State private var reload = UUID()
+    @State private var isChoosingLocation = false
 
     var body: some View {
         NavigationStack {
@@ -15,6 +16,9 @@ struct DiscoveryView: View {
         .onSubmit(of: .search) { query.text = searchText }
         .onChange(of: searchText) { _, value in
             if value.isEmpty { query.text = "" }
+        }
+        .sheet(isPresented: $isChoosingLocation) {
+            LocationSearchView(place: $query.place)
         }
     }
 
@@ -27,6 +31,7 @@ struct DiscoveryView: View {
                     Text("Find a huddl worth showing up to.")
                         .foregroundStyle(.secondary)
                 }
+                locationFilter
                 filters
                 results
             }
@@ -46,6 +51,34 @@ struct DiscoveryView: View {
     }
 
     @State private var didRequestRetry = false
+
+    private var locationFilter: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button { isChoosingLocation = true } label: {
+                Label(query.place?.name ?? "Anywhere", systemImage: "mappin.and.ellipse")
+                    .multilineTextAlignment(.leading)
+                    .frame(minHeight: 32)
+            }
+            .accessibilityLabel("Location: \(query.place?.name ?? "Anywhere")")
+            if query.place != nil {
+                HStack {
+                    Menu {
+                        Picker("Distance", selection: $query.distanceMiles) {
+                            ForEach([5, 10, 25, 50, 100], id: \.self) { miles in
+                                Text("\(miles) miles").tag(miles)
+                            }
+                        }
+                    } label: {
+                        Text("Within \(query.distanceMiles) miles").frame(minHeight: 32)
+                    }
+                    .accessibilityLabel("Distance: \(query.distanceMiles) miles")
+                    Button("Clear location") { query.place = nil }
+                        .frame(minHeight: 32)
+                }
+            }
+        }
+        .buttonStyle(.bordered)
+    }
 
     private var filters: some View {
         ViewThatFits(in: .horizontal) {
@@ -98,7 +131,9 @@ struct DiscoveryView: View {
             ContentUnavailableView {
                 Label("No huddlz found", systemImage: "magnifyingglass")
             } description: {
-                Text("Try another search, a different event type, or a wider date range.")
+                Text(query.place == nil
+                     ? "Try another search, a different event type, or a wider date range."
+                     : "Try a wider distance, another place, or different search filters.")
             } actions: {
                 if query != DiscoveryQuery() {
                     Button("Clear search and filters") { searchText = ""; query = DiscoveryQuery() }
