@@ -4,6 +4,61 @@ import Testing
 
 @MainActor
 struct DiscoveryBehaviorTests {
+    @Test("A late batch cannot alter a newer search or its filters", arguments: [200, 503])
+    func oldPageCannotAlterANewSearch(status: Int) async {
+        let pending = PendingHTTPResponse()
+        let client = DiscoveryClient { request in
+            let parameters = HTTPFixture.parameters(request)
+            if parameters["query"] == "hike", parameters["event_type"] == "virtual" {
+                return HTTPFixture.response(request, body: HTTPFixture.page([HTTPFixture.hike]))
+            }
+            if parameters["page[after]"] != nil { return try await pending.fetch(request) }
+            return HTTPFixture.response(request, body: HTTPFixture.page([HTTPFixture.coffee],
+                next: "https://huddlz.com/api/json/huddlz?page%5Bafter%5D=coffee"))
+        }
+        let discovery = DiscoveryStore(client: client)
+        await discovery.search(DiscoveryQuery())
+        let page = Task { await discovery.loadMore() }
+        await pending.waitUntilRequested()
+        await discovery.search(DiscoveryQuery(text: "hike", eventType: .virtual))
+        pending.finish(body: HTTPFixture.page([HTTPFixture.coffee]), status: status)
+        await page.value
+        #expect(discovery.huddlz.map(\.id) == ["hike"])
+        #expect(discovery.moreError == nil)
+        #expect(discovery.nextPage == nil)
+        #expect(!discovery.isLoadingMore)
+    }
+
+    @Test("Repeated loading preserves cards, requests one batch at a time, and stops at the end")
+    func paginationLoadsOnceAndStopsAtTheEnd() async {
+        let pending = PendingHTTPResponse()
+        var pageAttempts = 0
+        let client = DiscoveryClient { request in
+            if HTTPFixture.parameters(request)["page[after]"] == nil {
+                return HTTPFixture.response(request, body: HTTPFixture.page([HTTPFixture.coffee],
+                    next: "https://huddlz.com/api/json/huddlz?page%5Bafter%5D=coffee"))
+            }
+            pageAttempts += 1
+            if pageAttempts == 1 { return try await pending.fetch(request) }
+            return HTTPFixture.response(request, body: HTTPFixture.page([HTTPFixture.hike]))
+        }
+        let discovery = DiscoveryStore(client: client)
+        await discovery.search(DiscoveryQuery())
+        let page = Task { await discovery.loadMore() }
+        await pending.waitUntilRequested()
+        await discovery.loadMore()
+        #expect(pageAttempts == 1)
+        #expect(discovery.isLoadingMore)
+        #expect(discovery.huddlz.map(\.id) == ["coffee"])
+        pending.finish(body: HTTPFixture.page([HTTPFixture.hike]))
+        await page.value
+        #expect(discovery.huddlz.map(\.id) == ["coffee", "hike"])
+        #expect(discovery.nextPage == nil)
+        #expect(!discovery.isLoadingMore)
+        await discovery.loadMore()
+        #expect(pageAttempts == 1)
+    }
+
     @Test("Refresh keeps cards until success and preserves them on failure or cancellation", arguments: [200, 503, -1])
     func refreshKeepsCards(status: Int) async {
         let pending = PendingHTTPResponse()

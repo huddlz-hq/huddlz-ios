@@ -7,6 +7,7 @@ struct DiscoveryView: View {
     @State private var query = DiscoveryQuery()
     @State private var reload = UUID()
     @State private var isChoosingLocation = false
+    @State private var visibleHuddlIDs: Set<Huddl.ID> = []
 
     var body: some View {
         NavigationStack {
@@ -22,7 +23,7 @@ struct DiscoveryView: View {
 
     private var discoveryContent: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            LazyVStack(alignment: .leading, spacing: 20) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Find your people.")
                         .font(.system(.largeTitle, design: .rounded, weight: .bold))
@@ -160,25 +161,66 @@ struct DiscoveryView: View {
                 }
             }
         } else {
-            LazyVStack(spacing: 20) {
+            Group {
                 ForEach(store.huddlz) { huddl in
                     NavigationLink(value: huddl.id) { HuddlCard(huddl: huddl) }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("huddl-\(huddl.id)")
+                        .onScrollVisibilityChange(threshold: 0.1) { visible in
+                            if visible {
+                                visibleHuddlIDs.insert(huddl.id)
+                            } else {
+                                visibleHuddlIDs.remove(huddl.id)
+                            }
+                        }
                 }
                 if let message = store.moreError {
                     Text(message).foregroundStyle(.secondary)
                 }
-                if store.nextPage != nil {
-                    Button {
-                        Task { await store.loadMore() }
-                    } label: {
-                        if store.isLoadingMore { ProgressView("Loading more…") }
-                        else { Text(store.moreError == nil ? "Load more huddlz" : "Try loading more again") }
+                DiscoveryPaginationFooter(store: store, visibleHuddlIDs: visibleHuddlIDs)
+            }
+        }
+    }
+}
+
+// Keep pagination observation separate from the view that owns native refresh.
+private struct DiscoveryPaginationFooter: View {
+    let store: DiscoveryStore
+    let visibleHuddlIDs: Set<Huddl.ID>
+
+    private var automaticNextPage: URL? {
+        guard !store.isRefreshing,
+              store.moreError == nil,
+              let lastID = store.huddlz.last?.id,
+              visibleHuddlIDs.contains(lastID) else { return nil }
+        return store.nextPage
+    }
+
+    var body: some View {
+        Group {
+            if store.nextPage != nil {
+                Group {
+                    if store.isLoadingMore {
+                        ProgressView("Loading more…")
+                            .accessibilityIdentifier("pagination-loading")
+                    } else if store.moreError != nil {
+                        Button("Try loading more again") {
+                            Task { await store.loadMore() }
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(store.isRefreshing)
+                    } else {
+                        Color.clear.accessibilityHidden(true)
                     }
-                    .buttonStyle(.bordered)
-                    .disabled(store.isLoadingMore || store.isRefreshing)
                 }
+                .frame(maxWidth: .infinity, minHeight: 48)
+            }
+        }
+        .onChange(of: automaticNextPage, initial: true) { _, next in
+            guard let next else { return }
+            Task {
+                guard automaticNextPage == next else { return }
+                await store.loadMore()
             }
         }
     }

@@ -6,6 +6,90 @@ import Synchronization
 final class DiscoveryUITests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
 
+    func testScrollingLoadsTheNextBatchWithoutMovingExistingCards() {
+        let book = coffee.replacingOccurrences(of: "coffee", with: "book")
+            .replacingOccurrences(of: "Coffee with neighbors", with: "Neighborhood book club")
+        let garden = coffee.replacingOccurrences(of: "coffee", with: "garden")
+            .replacingOccurrences(of: "Coffee with neighbors", with: "Community gardening")
+        let app = launch(routes: [
+            ["path": "/api/json/huddlz", "query": ["page[after]": "book"],
+             "responses": [["status": 200, "body": page([garden]), "delaySeconds": 8]]],
+            route(body: page([coffee, hike, book], next: "https://huddlz.com/api/json/huddlz?page%5Bafter%5D=book"))
+        ])
+        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["huddl-garden"].exists)
+        let progress = app.activityIndicators["pagination-loading"]
+        let scroll = app.scrollViews.firstMatch
+        for _ in 0..<3 {
+            if progress.exists && progress.isHittable { break }
+            scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8))
+                .press(forDuration: 0.1, thenDragTo: scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)),
+                       withVelocity: .slow, thenHoldForDuration: 0.3)
+        }
+        XCTAssertTrue(progress.exists && progress.isHittable)
+        let lastCard = app.buttons["huddl-book"]
+        XCTAssertTrue(lastCard.isHittable)
+        let position = lastCard.frame.minY
+        XCTAssertTrue(app.buttons["huddl-garden"].waitForExistence(timeout: 12))
+        XCTAssertEqual(lastCard.frame.minY, position, accuracy: 2)
+        XCTAssertFalse(progress.exists)
+        XCTAssertFalse(app.buttons["Load more huddlz"].exists)
+    }
+
+    func testFailedNextBatchWaitsForRetryAndKeepsTheCurrentCards() {
+        let book = coffee.replacingOccurrences(of: "coffee", with: "book")
+        let garden = coffee.replacingOccurrences(of: "coffee", with: "garden")
+        let app = launch(routes: [
+            ["path": "/api/json/huddlz", "query": ["page[after]": "book"],
+             "responses": [["status": 503, "body": "{}"], ["status": 200, "body": page([garden])]]],
+            route(body: page([coffee, hike, book], next: "https://huddlz.com/api/json/huddlz?page%5Bafter%5D=book"))
+        ])
+        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
+        let retry = app.buttons["Try loading more again"]
+        let scroll = app.scrollViews.firstMatch
+        for _ in 0..<3 {
+            if retry.exists && retry.isHittable { break }
+            scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8))
+                .press(forDuration: 0.1, thenDragTo: scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)),
+                       withVelocity: .slow, thenHoldForDuration: 0.3)
+        }
+        XCTAssertTrue(retry.isHittable)
+        XCTAssertTrue(app.buttons["huddl-book"].isHittable)
+        XCTAssertFalse(app.buttons["huddl-garden"].exists)
+        scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2))
+            .press(forDuration: 0.1, thenDragTo: scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8)),
+                   withVelocity: .slow, thenHoldForDuration: 0.3)
+        scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8))
+            .press(forDuration: 0.1, thenDragTo: scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)),
+                   withVelocity: .slow, thenHoldForDuration: 0.3)
+        XCTAssertTrue(retry.exists)
+        XCTAssertFalse(app.buttons["huddl-garden"].exists)
+        retry.tap()
+        XCTAssertTrue(app.buttons["huddl-garden"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons.matching(identifier: "huddl-book").count, 1)
+        XCTAssertFalse(retry.exists)
+    }
+
+    func testScrollingContinuesPastARepeatedBatch() {
+        let book = coffee.replacingOccurrences(of: "coffee", with: "book")
+        let garden = coffee.replacingOccurrences(of: "coffee", with: "garden")
+        let app = launch(routes: [
+            route(query: ["page[after]": "book"], body: page([book], next: "https://huddlz.com/api/json/huddlz?page%5Bafter%5D=overlap")),
+            route(query: ["page[after]": "overlap"], body: page([garden])),
+            route(body: page([coffee, hike, book], next: "https://huddlz.com/api/json/huddlz?page%5Bafter%5D=book"))
+        ])
+        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
+        let scroll = app.scrollViews.firstMatch
+        for _ in 0..<3 {
+            if app.buttons["huddl-garden"].exists { break }
+            scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8))
+                .press(forDuration: 0.1, thenDragTo: scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)),
+                       withVelocity: .slow, thenHoldForDuration: 0.3)
+        }
+        XCTAssertTrue(app.buttons["huddl-garden"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons.matching(identifier: "huddl-book").count, 1)
+    }
+
     func testPullToRefreshShowsNativeProgressAndKeepsSearchAvailable() {
         let app = launch(routes: [[
             "path": "/api/json/huddlz", "query": [:],
@@ -476,7 +560,10 @@ final class DiscoveryUITests: XCTestCase {
         ["path": path, "query": query, "responses": [["status": status, "body": body]]]
     }
 
-    private func page(_ events: [String]) -> String { "{\"data\":[\(events.joined(separator: ","))]}" }
+    private func page(_ events: [String], next: String? = nil) -> String {
+        let link = next.map { "\"\($0)\"" } ?? "null"
+        return "{\"data\":[\(events.joined(separator: ","))],\"links\":{\"next\":\(link)}}"
+    }
 
     private var coffee: String {
         """
