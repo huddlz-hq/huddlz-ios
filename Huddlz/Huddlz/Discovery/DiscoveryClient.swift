@@ -17,6 +17,12 @@ struct DiscoveryClient {
         if let fetch {
             self.fetch = fetch
         } else {
+            #if DEBUG
+            if let service = UITestHTTPService.shared {
+                self.fetch = { try await service.respond(to: $0) }
+                return
+            }
+            #endif
             let configuration = URLSessionConfiguration.ephemeral
             configuration.httpShouldSetCookies = false
             configuration.timeoutIntervalForRequest = 30

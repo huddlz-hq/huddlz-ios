@@ -26,6 +26,7 @@ final class HuddlzUITests: XCTestCase {
     func testAppLaunches() throws {
         // UI tests must launch the application that they test.
         let app = XCUIApplication()
+        app.launchEnvironment["HUDDLZ_UI_HTTP_SCRIPT"] = UITestHTTPFixtures.emptyDiscoveryScript
         app.launch()
         XCTAssertTrue(app.staticTexts["Huddlz"].waitForExistence(timeout: 5))
 
@@ -38,7 +39,9 @@ final class HuddlzUITests: XCTestCase {
     func testLaunchPerformance() throws {
         // This measures how long it takes to launch your application.
         measure(metrics: [XCTApplicationLaunchMetric()]) {
-            XCUIApplication().launch()
+            let app = XCUIApplication()
+            app.launchEnvironment["HUDDLZ_UI_HTTP_SCRIPT"] = UITestHTTPFixtures.emptyDiscoveryScript
+            app.launch()
         }
     }
 }
