@@ -33,6 +33,8 @@ Keep new code grouped by feature as features are added. Add shared UI and networ
 
 Browse real huddlz in cards, submit text with the keyboard’s Search action, and filter by event type (all, in person, online, hybrid) and date (all upcoming, this week, this month). Clear the search field to reset the text query. Pull to refresh while keeping the current cards visible. A failed refresh keeps the cards and filters and offers retry. Bottom search uses a native UIKit search bar: in this layout on iOS 26.5, SwiftUI’s searchable integration detaches the refresh control. Keeping search separate preserves native pull-to-refresh feedback. Scroll near the last card to load the next batch. A bottom spinner shows progress; a failed batch keeps the cards and offers retry. Loading stops after the final batch. Opening a card fetches current details separately. Event times display in the event’s time zone.
 
+In-person and hybrid details show a native map when Apple Maps resolves the venue to one result. Tap the address row to open that place in Maps and choose directions. The API currently supplies location text without coordinates; failed, empty, or ambiguous lookups keep the address available as a Maps search. Online events and unannounced locations have no map action. A separate live check on September 7, 2026 resolved both the DOS Coffee address in St. Augustine and the Jacksonville Beach venue to one place in Apple Maps.
+
 Choose Anywhere to search for a city or postal code with Apple Maps. Select a place, then choose a distance of 5, 10, 25, 50, or 100 miles. Clear location returns to browsing anywhere and keeps the event search and filters. Place searches run when submitted. Use current location requests location access only after you choose that action, then uses a single fix to find nearby huddlz. Denied access or an unavailable location leaves manual place search available. Leaving the picker cancels a pending lookup.
 
 The client uses anonymous, cookie-free requests to the public JSON API:
@@ -61,6 +63,8 @@ Artwork tests send PNG bytes through an HTTP fixture and verify visible image pi
 The app uses the API’s resolved `image_url`, with `thumbnail_url` retained for older responses. After [backend #430](https://github.com/huddlz-hq/huddlz/issues/430) deployed, live event artwork and the group image fallback were verified in discovery; the group image also appeared in event details on September 7, 2026.
 
 Place-search tests replace Apple’s external Maps search and exercise the real request, map-item conversion, state, and views. UI fixtures use `HUDDLZ_UI_MAP_SCRIPT`; when UI HTTP fixtures are active, place lookup also fails locally on missing fixtures. Both fixture hooks are excluded from Release builds.
+
+Venue-map UI tests control the external place lookup, render the native map, and tap the address to launch Apple Maps. They cover unavailable and ambiguous lookups and locations that should have no map action. Swift Testing also verifies the exact place coordinates and encoded address sent to Maps. Map tiles and the Maps app remain system services; assertions do not depend on their live search results or tile imagery.
 
 Current-location UI tests use Apple’s simulated device location and real system permission prompts to verify nearby results and denied access. For unavailable-location recovery, the `HUDDLZ_UI_LOCATION_FAIL_FIRST` fixture fails one external Core Location request; the retry uses the real service. This hook requires HTTP fixtures and is excluded from Release builds.
 

@@ -6,6 +6,75 @@ import Synchronization
 final class DiscoveryUITests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
 
+    func testVenueMapAndAddressOpenAppleMaps() {
+        for eventType in ["in_person", "hybrid"] {
+            let address = "1 Apple Park Way, Cupertino, CA"
+            let event = coffee.replacingOccurrences(of: "Juniper Café", with: address)
+                .replacingOccurrences(of: "in_person", with: eventType)
+            let app = launch(routes: [
+                route(body: page([event])),
+                route(path: "/api/json/huddlz/coffee", body: "{\"data\":\(event)}")
+            ], places: [["query": address, "results": [
+                ["name": "Apple Park", "address": address, "latitude": 37.3349, "longitude": -122.0090]
+            ]]])
+            XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
+            app.buttons["huddl-coffee"].tap()
+            let map = app.maps.firstMatch
+            XCTAssertTrue(map.waitForExistence(timeout: 5))
+            let venue = app.buttons["Open location in Maps"]
+            if !venue.isHittable { app.swipeUp() }
+            XCTAssertTrue(venue.isHittable)
+            XCTAssertTrue(venue.label.contains(address))
+            let attachment = XCTAttachment(screenshot: app.screenshot())
+            attachment.lifetime = .keepAlways
+            add(attachment)
+            venue.tap()
+            let maps = XCUIApplication(bundleIdentifier: "com.apple.Maps")
+            XCTAssertTrue(maps.wait(for: .runningForeground, timeout: 10))
+            maps.terminate()
+        }
+    }
+
+    func testUnresolvedVenueStillOpensAnAddressSearchInMaps() {
+        let address = "Juniper Café"
+        let match: [String: Any] = ["name": address, "address": "1 Oak Street", "latitude": 37.3, "longitude": -122.0]
+        let lookups: [[[String: Any]]] = [[], [["query": address, "results": []]],
+                                        [["query": address, "results": [match, match]]]]
+        for places in lookups {
+            let app = launch(routes: [
+                route(body: page([coffee])),
+                route(path: "/api/json/huddlz/coffee", body: "{\"data\":\(coffee)}")
+            ], places: places)
+            XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
+            app.buttons["huddl-coffee"].tap()
+            let venue = app.buttons["Open location in Maps"]
+            XCTAssertTrue(venue.waitForExistence(timeout: 5))
+            XCTAssertTrue(venue.label.contains(address))
+            XCTAssertFalse(app.maps.firstMatch.exists)
+            venue.tap()
+            let maps = XCUIApplication(bundleIdentifier: "com.apple.Maps")
+            XCTAssertTrue(maps.wait(for: .runningForeground, timeout: 5))
+            maps.terminate()
+        }
+    }
+
+    func testOnlineAndUnannouncedLocationsHaveNoMapAction() {
+        let events = [coffee.replacingOccurrences(of: "in_person", with: "virtual"),
+                      coffee.replacingOccurrences(of: "\"Juniper Café\"", with: "null"),
+                      coffee.replacingOccurrences(of: "Juniper Café", with: "   ")]
+        for event in events {
+            let app = launch(routes: [
+                route(body: page([event])),
+                route(path: "/api/json/huddlz/coffee", body: "{\"data\":\(event)}")
+            ])
+            XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
+            app.buttons["huddl-coffee"].tap()
+            XCTAssertTrue(app.staticTexts["About this huddl"].waitForExistence(timeout: 5))
+            XCTAssertFalse(app.buttons["Open location in Maps"].exists)
+            XCTAssertFalse(app.maps.firstMatch.exists)
+        }
+    }
+
     func testScrollingLoadsTheNextBatchWithoutMovingExistingCards() {
         let book = coffee.replacingOccurrences(of: "coffee", with: "book")
             .replacingOccurrences(of: "Coffee with neighbors", with: "Neighborhood book club")
