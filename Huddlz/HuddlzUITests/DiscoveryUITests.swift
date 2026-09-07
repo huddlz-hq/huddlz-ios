@@ -1,8 +1,91 @@
 import XCTest
+import CoreLocation
 
 @MainActor
 final class DiscoveryUITests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
+
+    func testCurrentLocationFindsNearbyHuddlzOnlyWhenRequestedAndKeepsFilters() {
+        XCUIDevice.shared.location = XCUILocation(location: CLLocation(latitude: 29.9012, longitude: -81.3124))
+        defer { XCUIDevice.shared.location = nil }
+        let app = launch(routes: [
+            route(query: ["query": "coffee", "date_filter": "this_week", "event_type": "in_person",
+                          "search_latitude": "29.9012", "search_longitude": "-81.3124", "distance_miles": "25"],
+                  body: page([coffee])),
+            route(body: page([hike]))
+        ], resetLocationPermission: true)
+        XCTAssertTrue(app.buttons["huddl-hike"].waitForExistence(timeout: 5))
+        let system = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        XCTAssertFalse(system.alerts.firstMatch.exists)
+        app.searchFields.firstMatch.tap()
+        app.searchFields.firstMatch.typeText("coffee\n")
+        app.buttons["When: All upcoming"].tap()
+        app.buttons["This week"].tap()
+        app.buttons["Event type: All types"].tap()
+        app.buttons["In person"].tap()
+        app.buttons["Location: Anywhere"].tap()
+        XCTAssertFalse(system.alerts.firstMatch.exists)
+        XCTAssertTrue(app.buttons["Use current location"].waitForExistence(timeout: 3))
+        app.buttons["Use current location"].tap()
+        let allow = system.alerts.buttons["Allow Once"]
+        XCTAssertTrue(allow.waitForExistence(timeout: 5))
+        allow.tap()
+        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["Location: Current location"].exists)
+        XCTAssertTrue(app.buttons["When: This week"].exists)
+        XCTAssertTrue(app.buttons["Event type: In person"].exists)
+        app.buttons["Clear location"].tap()
+        XCTAssertTrue(app.buttons["huddl-hike"].waitForExistence(timeout: 5))
+    }
+
+    func testDeniedLocationExplainsPermissionAndStillAllowsManualSearch() {
+        let app = launch(routes: [
+            route(query: ["search_latitude": "29.9012", "search_longitude": "-81.3124"], body: page([coffee])),
+            route(body: page([hike]))
+        ], places: [["query": "St. Augustine", "results": [
+            ["name": "St. Augustine", "address": "St. Augustine, FL, USA", "latitude": 29.9012,
+             "longitude": -81.3124, "timeZone": "America/New_York"]
+        ]]], resetLocationPermission: true)
+        XCTAssertTrue(app.buttons["huddl-hike"].waitForExistence(timeout: 5))
+        app.buttons["Location: Anywhere"].tap()
+        app.buttons["Use current location"].tap()
+        let deny = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.buttons["Don’t Allow"]
+        XCTAssertTrue(deny.waitForExistence(timeout: 5))
+        deny.tap()
+        let explanation = app.staticTexts["Location access is off. Allow access in Settings, or search for a city or postal code."]
+        XCTAssertTrue(explanation.waitForExistence(timeout: 5))
+        app.buttons["Use current location"].tap()
+        XCTAssertTrue(explanation.exists)
+        XCTAssertFalse(XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.firstMatch.exists)
+        app.textFields["City or postal code"].tap()
+        app.textFields["City or postal code"].typeText("St. Augustine\n")
+        let place = app.buttons["St. Augustine, FL, USA"]
+        XCTAssertTrue(place.waitForExistence(timeout: 5))
+        place.tap()
+        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Location: St. Augustine, FL, USA"].exists)
+    }
+
+    func testUnavailableLocationCanBeRetriedAndManualSearchStaysAvailable() {
+        XCUIDevice.shared.location = XCUILocation(location: CLLocation(latitude: 29.9012, longitude: -81.3124))
+        defer { XCUIDevice.shared.location = nil }
+        let app = launch(routes: [
+            route(query: ["search_latitude": "29.9012", "search_longitude": "-81.3124"], body: page([coffee])),
+            route(body: page([hike]))
+        ], resetLocationPermission: true, failFirstLocation: true)
+        XCTAssertTrue(app.buttons["huddl-hike"].waitForExistence(timeout: 5))
+        app.buttons["Location: Anywhere"].tap()
+        app.buttons["Use current location"].tap()
+        let allow = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.buttons["Allow Once"]
+        XCTAssertTrue(allow.waitForExistence(timeout: 5))
+        allow.tap()
+        XCTAssertTrue(app.staticTexts["Your location couldn’t be found. Try again or search for a city or postal code."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.textFields["City or postal code"].isEnabled)
+        XCTAssertTrue(app.buttons["Use current location"].isEnabled)
+        XCUIDevice.shared.location = XCUILocation(location: CLLocation(latitude: 29.9012, longitude: -81.3124))
+        app.buttons["Use current location"].tap()
+        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 15))
+    }
 
     func testEventImageAppearsInItsCardAndDetails() {
         let illustrated = coffee.replacingOccurrences(of: "\"thumbnail_url\":null",
@@ -292,13 +375,15 @@ final class DiscoveryUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Try again"].exists)
     }
 
-    private func launch(routes: [[String: Any]], places: [[String: Any]] = []) -> XCUIApplication {
+    private func launch(routes: [[String: Any]], places: [[String: Any]] = [], resetLocationPermission: Bool = false, failFirstLocation: Bool = false) -> XCUIApplication {
         XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
+        if resetLocationPermission { app.resetAuthorizationStatus(for: .location) }
         app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         let script = try! JSONSerialization.data(withJSONObject: routes)
         app.launchEnvironment["HUDDLZ_UI_HTTP_SCRIPT"] = String(decoding: script, as: UTF8.self)
         app.launchEnvironment["HUDDLZ_UI_MAP_SCRIPT"] = String(decoding: try! JSONSerialization.data(withJSONObject: places), as: UTF8.self)
+        if failFirstLocation { app.launchEnvironment["HUDDLZ_UI_LOCATION_FAIL_FIRST"] = "1" }
         app.launch()
         return app
     }
