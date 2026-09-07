@@ -20,6 +20,7 @@ final class HuddlzUITestsLaunchTests: XCTestCase {
     @MainActor
     func testLaunch() throws {
         let app = XCUIApplication()
+        app.launchEnvironment["HUDDLZ_UI_HTTP_SCRIPT"] = UITestHTTPFixtures.emptyDiscoveryScript
         app.launch()
 
         // Insert steps here to perform after app launch but before taking a screenshot,

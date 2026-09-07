@@ -42,3 +42,11 @@ The client uses anonymous, cookie-free requests to the public JSON API:
 Schema: https://huddlz.com/api/json/open_api; browser docs: https://huddlz.com/api/json/swaggerui. Verified September 6, 2026. The deployed API rejects the documented `sort=soonest`, so the app uses default ordering. Location-radius search, group discovery, authentication, and RSVP are outside this issue. Missing thumbnails use an event-type illustration; unavailable host/attendance data is not invented.
 
 Design reference: `prototype/issue-1-core-journey`, variant A (cards). The prototype and simulated account/RSVP flow remain on that branch.
+
+## Behavior tests
+
+Use Command-U in Xcode to run the suite. `HuddlzTests` exercises discovery through its public interface with controlled HTTP responses. `DiscoveryUITests` drives search, filters, details, empty states, and retry in Simulator. Test names describe the behavior they protect.
+
+UI tests pass a response script through `HUDDLZ_UI_HTTP_SCRIPT`. The debug build uses it only at the HTTP boundary; requests, decoding, state, and views remain real. A missing or invalid scripted response fails locally instead of contacting production. Release builds exclude this hook.
+
+Timing tests hold and release responses explicitly, so cancellation and overlapping searches do not depend on sleeps. Keep live API smoke checks separate from this deterministic suite.
