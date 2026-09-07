@@ -4,6 +4,7 @@ struct LocationSearchView: View {
     @Environment(\.dismiss) private var dismiss
     @Binding var place: DiscoveryPlace?
     @State private var store = PlaceSearchStore()
+    @State private var currentLocation = CurrentLocationStore()
     @State private var text = ""
     @State private var request = SearchRequest()
 
@@ -16,6 +17,20 @@ struct LocationSearchView: View {
         NavigationStack {
             List {
                 Section {
+                    Button {
+                        currentLocation.request()
+                    } label: {
+                        Label("Use current location", systemImage: "location.fill")
+                    }
+                    .disabled(currentLocation.isLoading)
+                    if currentLocation.isLoading {
+                        ProgressView("Finding your location…")
+                    }
+                    if let message = currentLocation.errorMessage {
+                        Text(message)
+                    }
+                }
+                Section {
                     TextField("City or postal code", text: $text)
                         .submitLabel(.search)
                         .autocorrectionDisabled()
@@ -26,7 +41,7 @@ struct LocationSearchView: View {
                     Text("Choose a place to find huddlz nearby.")
                 }
                 if let place {
-                    Section("Current location") {
+                    Section("Selected location") {
                         Text(place.name)
                     }
                 }
@@ -61,6 +76,13 @@ struct LocationSearchView: View {
                 }
             }
             .onChange(of: text) { _, _ in store.clear() }
+            .onChange(of: currentLocation.place) { _, result in
+                if let result {
+                    place = result
+                    dismiss()
+                }
+            }
+            .onDisappear { currentLocation.cancel() }
             .task(id: request) { await store.search(request.text) }
         }
     }
