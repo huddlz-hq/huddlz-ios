@@ -58,6 +58,7 @@ struct HuddlDetailView: View {
         .background(HuddlStyle.background)
         .navigationTitle("The huddl")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
         .task(id: reload) { await load() }
     }
 

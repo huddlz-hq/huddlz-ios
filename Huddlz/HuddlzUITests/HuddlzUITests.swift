@@ -28,7 +28,7 @@ final class HuddlzUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment["HUDDLZ_UI_HTTP_SCRIPT"] = UITestHTTPFixtures.emptyDiscoveryScript
         app.launch()
-        XCTAssertTrue(app.staticTexts["Huddlz"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Find your people."].waitForExistence(timeout: 5))
 
         // Use XCTAssert and related functions to verify your tests produce the correct results.
         // XCUIAutomation Documentation
