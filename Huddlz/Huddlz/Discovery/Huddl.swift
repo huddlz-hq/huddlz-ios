@@ -85,4 +85,13 @@ struct DiscoveryQuery: Equatable, Sendable {
     var dates = DiscoveryDates.upcoming
     var eventType: EventType?
     var timeZone = TimeZone.current.identifier
+    var place: DiscoveryPlace?
+    var distanceMiles = 25
+}
+
+struct DiscoveryPlace: Equatable, Hashable, Sendable {
+    let name: String
+    let latitude: Double
+    let longitude: Double
+    let timeZone: String?
 }
