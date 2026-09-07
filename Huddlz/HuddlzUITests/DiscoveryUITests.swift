@@ -6,7 +6,7 @@ final class DiscoveryUITests: XCTestCase {
 
     func testEventImageAppearsInItsCardAndDetails() {
         let illustrated = coffee.replacingOccurrences(of: "\"thumbnail_url\":null",
-                                                     with: "\"thumbnail_url\":\"https://images.example.test/coffee.png\"")
+                                                     with: "\"thumbnail_url\":null,\"image_url\":\"https://images.example.test/coffee.png\"")
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: 80, height: 80))
         let png = renderer.pngData { context in
             UIColor.green.setFill()
@@ -35,7 +35,7 @@ final class DiscoveryUITests: XCTestCase {
     func testMissingAndFailedImagesKeepTheFallbackAndEventDetails() {
         for imageResponse in [503, 200, 0] {
             let event = imageResponse == 0 ? coffee : coffee.replacingOccurrences(
-                of: "\"thumbnail_url\":null", with: "\"thumbnail_url\":\"https://images.example.test/unavailable.png\"")
+                of: "\"thumbnail_url\":null", with: "\"image_url\":\"https://images.example.test/unavailable.png\"")
             let app = launch(routes: [
                 route(body: page([event])),
                 route(path: "/api/json/huddlz/coffee", body: "{\"data\":\(event)}"),

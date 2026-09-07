@@ -13,6 +13,7 @@ struct Huddl: Identifiable, Decodable, Hashable, Sendable {
         let eventType: EventType
         let physicalLocation: String?
         let thumbnailUrl: String?
+        let imageUrl: String?
         let lifecycleState: String
         let cancellationReason: String?
     }
@@ -20,7 +21,7 @@ struct Huddl: Identifiable, Decodable, Hashable, Sendable {
     var title: String { attributes.title }
 
     var imageURL: URL? {
-        guard let text = attributes.thumbnailUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+        guard let text = (attributes.imageUrl ?? attributes.thumbnailUrl)?.trimmingCharacters(in: .whitespacesAndNewlines),
               let url = URL(string: text),
               ["https", "http"].contains(url.scheme?.lowercased() ?? ""),
               let host = url.host, !host.isEmpty else { return nil }

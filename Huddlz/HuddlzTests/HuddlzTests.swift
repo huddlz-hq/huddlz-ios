@@ -7,7 +7,7 @@ struct DiscoveryBehaviorTests {
     @Test("An invalid image URL does not hide an otherwise readable huddl")
     func invalidImageDoesNotHideEvent() async throws {
         let event = HTTPFixture.coffee.replacingOccurrences(of: "\"thumbnail_url\":null",
-                                                          with: "\"thumbnail_url\":\"https://[\"")
+                                                          with: "\"image_url\":\"https://[\"")
         let client = DiscoveryClient { request in
             let body = request.url?.path == "/api/json/huddlz/coffee"
                 ? "{\"data\":\(event)}" : HTTPFixture.page([event])
