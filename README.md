@@ -54,6 +54,10 @@ UI tests pass a response script through `HUDDLZ_UI_HTTP_SCRIPT`. The debug build
 
 Timing tests hold and release responses explicitly, so cancellation and overlapping searches do not depend on sleeps. Keep live API smoke checks separate from this deterministic suite.
 
+Artwork tests send PNG bytes through an HTTP fixture and verify visible image pixels in cards and details. Missing images, failed requests, and unreadable image data retain the event-type illustration. A malformed image URL does not prevent the event from loading.
+
+Live artwork remains dependent on [backend #430](https://github.com/huddlz-hq/huddlz/issues/430): current public responses return empty thumbnail URLs and do not expose the image source used by the website. [iOS #7](https://github.com/huddlz-hq/huddlz-ios/issues/7) remains open until that path can be verified with real event imagery.
+
 Place-search tests replace Apple’s external Maps search and exercise the real request, map-item conversion, state, and views. UI fixtures use `HUDDLZ_UI_MAP_SCRIPT`; when UI HTTP fixtures are active, place lookup also fails locally on missing fixtures. Both fixture hooks are excluded from Release builds.
 
 ## Continuous integration

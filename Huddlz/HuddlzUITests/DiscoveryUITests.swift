@@ -4,6 +4,79 @@ import XCTest
 final class DiscoveryUITests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
 
+    func testEventImageAppearsInItsCardAndDetails() {
+        let illustrated = coffee.replacingOccurrences(of: "\"thumbnail_url\":null",
+                                                     with: "\"thumbnail_url\":\"https://images.example.test/coffee.png\"")
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 80, height: 80))
+        let png = renderer.pngData { context in
+            UIColor.green.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 80, height: 80))
+        }
+        let app = launch(routes: [
+            route(body: page([illustrated])),
+            route(path: "/api/json/huddlz/coffee", body: "{\"data\":\(illustrated)}"),
+            ["path": "/coffee.png", "query": [:],
+             "responses": [["status": 200, "bodyBase64": png.base64EncodedString()]]]
+        ])
+        let card = app.buttons["huddl-coffee"]
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        let cardImage = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            Self.greenFraction(card.screenshot().image) > 0.1
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [cardImage], timeout: 8), .completed)
+        card.tap()
+        XCTAssertTrue(app.staticTexts["About this huddl"].waitForExistence(timeout: 5))
+        let detailImage = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            Self.greenFraction(app.screenshot().image) > 0.03
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [detailImage], timeout: 8), .completed)
+    }
+
+    func testMissingAndFailedImagesKeepTheFallbackAndEventDetails() {
+        for imageResponse in [0, 503, 200] {
+            let event = imageResponse == 0 ? coffee : coffee.replacingOccurrences(
+                of: "\"thumbnail_url\":null", with: "\"thumbnail_url\":\"https://images.example.test/unavailable.png\"")
+            let app = launch(routes: [
+                route(body: page([event])),
+                route(path: "/api/json/huddlz/coffee", body: "{\"data\":\(event)}"),
+                route(path: "/unavailable.png", body: "not image data", status: imageResponse)
+            ])
+            let card = app.buttons["huddl-coffee"]
+            XCTAssertTrue(card.waitForExistence(timeout: 5))
+            XCTAssertGreaterThan(Self.greenFraction(card.screenshot().image, fallback: true), 0.01,
+                                 "Expected the event-type illustration for image response \(imageResponse)")
+            card.tap()
+            XCTAssertTrue(app.staticTexts["Bring a mug and meet your neighbors."].waitForExistence(timeout: 5))
+            app.terminate()
+        }
+    }
+
+    private static func greenFraction(_ image: UIImage, fallback: Bool = false) -> Double {
+        guard var source = image.cgImage else { return 0 }
+        if fallback {
+            // Inspect only the artwork, excluding the card's title and event-type text.
+            source = source.cropping(to: CGRect(x: 0, y: 0, width: source.width,
+                                                height: Int(Double(source.width) * 0.42)))!
+        }
+        let width = source.width, height = source.height
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        let count = pixels.withUnsafeMutableBytes { bytes -> Int in
+            let context = CGContext(data: bytes.baseAddress, width: width, height: height,
+                                    bitsPerComponent: 8, bytesPerRow: width * 4,
+                                    space: CGColorSpaceCreateDeviceRGB(),
+                                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+            context.draw(source, in: CGRect(x: 0, y: 0, width: width, height: height))
+            let data = bytes.bindMemory(to: UInt8.self)
+            return stride(from: 0, to: data.count, by: 4).filter {
+                if fallback {
+                    return data[$0] > 100 && data[$0 + 2] > 80 && Double(data[$0 + 1]) < Double(data[$0]) * 0.8
+                }
+                return data[$0] < 50 && data[$0 + 1] > 200 && data[$0 + 2] < 50
+            }.count
+        }
+        return Double(count) / Double(width * height)
+    }
+
     func testChoosingAPlaceShowsNearbyResultsAndKeepsFilters() {
         let nearby = coffee.replacingOccurrences(of: "Coffee with neighbors", with: "Nearby coffee")
         let app = launch(routes: [

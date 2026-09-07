@@ -12,12 +12,20 @@ struct Huddl: Identifiable, Decodable, Hashable, Sendable {
         let timeZone: String
         let eventType: EventType
         let physicalLocation: String?
-        let thumbnailUrl: URL?
+        let thumbnailUrl: String?
         let lifecycleState: String
         let cancellationReason: String?
     }
 
     var title: String { attributes.title }
+
+    var imageURL: URL? {
+        guard let text = attributes.thumbnailUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+              let url = URL(string: text),
+              ["https", "http"].contains(url.scheme?.lowercased() ?? ""),
+              let host = url.host, !host.isEmpty else { return nil }
+        return url
+    }
 
     var location: String {
         if let location = attributes.physicalLocation, !location.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {

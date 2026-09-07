@@ -17,7 +17,17 @@ final class UITestHTTPService {
 
     private struct Response: Decodable {
         let status: Int
-        let body: String
+        var body: String = ""
+        var bodyBase64: String?
+
+        enum CodingKeys: String, CodingKey { case status, body, bodyBase64 }
+        init(status: Int, body: String) { self.status = status; self.body = body }
+        init(from decoder: Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            status = try values.decode(Int.self, forKey: .status)
+            body = try values.decodeIfPresent(String.self, forKey: .body) ?? ""
+            bodyBase64 = try values.decodeIfPresent(String.self, forKey: .bodyBase64)
+        }
     }
 
     private var routes: [Route]
@@ -25,6 +35,7 @@ final class UITestHTTPService {
     private init(script: String) {
         // Invalid scripts fail closed: UI tests must never fall through to production.
         routes = (try? JSONDecoder().decode([Route].self, from: Data(script.utf8))) ?? []
+        URLProtocol.registerClass(UITestImageURLProtocol.self)
     }
 
     func respond(to request: URLRequest) async throws -> (Data, URLResponse) {
@@ -41,8 +52,35 @@ final class UITestHTTPService {
             if routes[index].responses.count > 1 { routes[index].responses.removeFirst() }
         }
         try Task.checkCancellation()
-        return (Data(response.body.utf8), HTTPURLResponse(url: url, statusCode: response.status,
+        let data = response.bodyBase64.flatMap { Data(base64Encoded: $0) } ?? Data(response.body.utf8)
+        return (data, HTTPURLResponse(url: url, statusCode: response.status,
                                                        httpVersion: nil, headerFields: nil)!)
     }
+}
+
+/// AsyncImage keeps its real loader; only its external HTTP response is replaced.
+private final class UITestImageURLProtocol: URLProtocol, @unchecked Sendable {
+    private var loadingTask: Task<Void, Never>?
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        loadingTask = Task { @MainActor in
+            do {
+                guard let service = UITestHTTPService.shared else { throw URLError(.badServerResponse) }
+                let (data, response) = try await service.respond(to: request)
+                guard !Task.isCancelled else { return }
+                client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+                client?.urlProtocol(self, didLoad: data)
+                client?.urlProtocolDidFinishLoading(self)
+            } catch {
+                guard !Task.isCancelled else { return }
+                client?.urlProtocol(self, didFailWithError: error)
+            }
+        }
+    }
+
+    override func stopLoading() { loadingTask?.cancel() }
 }
 #endif

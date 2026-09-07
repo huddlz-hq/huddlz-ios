@@ -10,7 +10,7 @@ struct HuddlArtwork: View {
     let huddl: Huddl
 
     var body: some View {
-        AsyncImage(url: huddl.attributes.thumbnailUrl) { image in
+        AsyncImage(url: huddl.imageURL) { image in
             image.resizable().scaledToFill()
         } placeholder: {
             ZStack {
