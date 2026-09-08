@@ -71,6 +71,55 @@ struct AccountClient {
         return session
     }
 
+    func saveHomeLocation(userID: String, token: String, place: DiscoveryPlace) async throws {
+        guard let timeZone = place.timeZone, TimeZone(identifier: timeZone) != nil else {
+            throw AccountError.unavailable
+        }
+        struct Input: Encodable {
+            let homeLocation: String
+            let homeLatitude: Double
+            let homeLongitude: Double
+            let homeTimeZone: String
+        }
+        struct Variables: Encodable { let id: String; let input: Input }
+        struct Mutation: Encodable { let query: String; let variables: Variables }
+        struct Problem: Decodable {}
+        struct Document: Decodable {
+            struct Payload: Decodable {
+                struct Update: Decodable {
+                    struct User: Decodable { let id: String; let homeLocation: String? }
+                    let result: User?
+                    let errors: [Problem]
+                }
+                let updateHomeLocation: Update?
+            }
+            let data: Payload?
+            let errors: [Problem]?
+        }
+        var request = URLRequest(url: URL(string: "https://huddlz.com/gql")!)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.httpBody = try JSONEncoder().encode(Mutation(
+            query: """
+            mutation SaveHomeLocation($id: ID!, $input: UpdateHomeLocationInput!) {
+              updateHomeLocation(id: $id, input: $input) {
+                result { id homeLocation }
+                errors { __typename }
+              }
+            }
+            """,
+            variables: Variables(id: userID, input: Input(homeLocation: place.name,
+                homeLatitude: place.latitude, homeLongitude: place.longitude, homeTimeZone: timeZone))))
+        let document = try JSONDecoder().decode(Document.self, from: await send(request))
+        guard document.errors?.isEmpty != false,
+              let update = document.data?.updateHomeLocation, update.errors.isEmpty,
+              update.result?.id == userID, update.result?.homeLocation == place.name else {
+            throw AccountError.unavailable
+        }
+    }
+
     func requestPasswordReset(email: String) async throws {
         struct ResetRequest: Encodable { let email: String }
         var request = URLRequest(url: URL(string: "https://huddlz.com/api/auth/password_reset")!)

@@ -55,6 +55,14 @@ final class AccountStore {
         }
     }
 
+    func saveHomeLocation(_ place: DiscoveryPlace) async throws {
+        guard !isBusy, let user else { throw AccountError.unavailable }
+        isBusy = true
+        defer { isBusy = false }
+        guard let token = try await tokens.load() else { throw AccountError.unauthorized }
+        try await client.saveHomeLocation(userID: user.id, token: token, place: place)
+    }
+
     func signOut() async {
         guard !isBusy else { return }
         isBusy = true
