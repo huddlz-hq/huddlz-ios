@@ -61,7 +61,6 @@ struct DiscoveryView: View {
                 .frame(height: 56)
                 .padding(.horizontal, 12)
                 .padding(.bottom, 8)
-                .background(.bar)
         }
         .refreshable { await store.refresh(query) }
         .navigationDestination(for: Huddl.ID.self) { HuddlDetailView(id: $0) }
