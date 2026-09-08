@@ -31,13 +31,24 @@ jobs:
           xcodebuild -version
           xcrun simctl list devices available
 
+      - name: Wait for Simulator readiness
+        timeout-minutes: 5
+        run: |
+          simulator_id="$(xcrun simctl list devices available --json | jq -er '
+            .devices["com.apple.CoreSimulator.SimRuntime.iOS-26-5"]
+            | map(select(.name == "iPhone 17"))
+            | if length == 1 then .[0].udid else error("Expected one iPhone 17 simulator") end
+          ')"
+          xcrun simctl bootstatus "$simulator_id" -b
+          echo "HUDDLZ_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
+
       - name: Run all tests
         run: |
           set -o pipefail
           xcodebuild test \
             -project Huddlz/Huddlz.xcodeproj \
             -scheme Huddlz \
-            -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' \
+            -destination "platform=iOS Simulator,id=$HUDDLZ_SIMULATOR_ID" \
             -parallel-testing-enabled NO \
             -derivedDataPath "$RUNNER_TEMP/HuddlzDerivedData" \
             -resultBundlePath "$RUNNER_TEMP/HuddlzTests.xcresult" \

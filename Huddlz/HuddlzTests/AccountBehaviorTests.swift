@@ -7,6 +7,24 @@ struct AccountBehaviorTests {
     private static let user = #"{"id":"neighbor","email":"neighbor@example.com","display_name":"Our Neighbor"}"#
     private static let session = "{\"token\":\"fixture-token\",\"user\":\(user)}"
 
+    @Test("Reset requests submit only the entered email to Huddlz")
+    func resetRequestSubmitsEmail() async throws {
+        var submitted = false
+        let client = AccountClient { request in
+            #expect(request.url?.absoluteString == "https://huddlz.com/api/auth/password_reset")
+            #expect(request.httpMethod == "POST")
+            #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+            #expect(request.value(forHTTPHeaderField: "Authorization") == nil)
+            let data = try #require(request.httpBody)
+            let body = try JSONSerialization.jsonObject(with: data) as? [String: String]
+            #expect(body == ["email": "neighbor+coffee@example.com"])
+            submitted = true
+            return HTTPFixture.response(request, body: "", status: 204)
+        }
+        try await client.requestPasswordReset(email: " neighbor+coffee@example.com \n")
+        #expect(submitted)
+    }
+
     @Test("Sign-out removes the saved login before server revocation, even offline", arguments: [204, 401, 503, -1])
     func signOutClearsLocalSession(status: Int) async throws {
         let tokens = SessionTokenStore(service: "com.huddlz.tests.\(UUID())")
