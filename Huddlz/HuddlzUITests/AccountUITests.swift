@@ -4,6 +4,26 @@ import XCTest
 final class AccountUITests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
 
+    func testShowingAndHidingPasswordPreservesEntryAndCanSignIn() {
+        let app = launch()
+        app.buttons["Account"].tap()
+        app.textFields["Email"].tap()
+        app.textFields["Email"].typeText("neighbor@example.com")
+        app.secureTextFields["Password"].tap()
+        app.secureTextFields["Password"].typeText("sample-password")
+        XCTAssertTrue(app.buttons["Show password"].exists)
+        app.buttons["Show password"].tap()
+        XCTAssertEqual(app.textFields["Password"].value as? String, "sample-password")
+        app.buttons["Hide password"].tap()
+        XCTAssertTrue(app.secureTextFields["Password"].exists)
+        app.buttons["Sign in"].tap()
+        let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["Close account"])
+        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 5), .completed)
+        app.buttons["Account"].tap()
+        XCTAssertTrue(app.staticTexts["Our Neighbor"].waitForExistence(timeout: 5))
+        signOut(app)
+    }
+
     func testSigningInReturnsToBrowsingAndShowsTheAccount() {
         let app = launch()
         app.buttons["When: All upcoming"].tap()
@@ -57,7 +77,7 @@ final class AccountUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Our Neighbor"].exists)
         app.secureTextFields["Password"].tap()
         app.secureTextFields["Password"].typeText("sample-password\n")
-        let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["Done"])
+        let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["Close account"])
         XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 5), .completed)
         app.buttons["Account"].tap()
         XCTAssertTrue(app.staticTexts["Our Neighbor"].waitForExistence(timeout: 5))
@@ -90,7 +110,7 @@ final class AccountUITests: XCTestCase {
         app.textFields["Email"].typeText("neighbor@example.com")
         app.secureTextFields["Password"].tap()
         app.secureTextFields["Password"].typeText("sample-password\n")
-        let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["Done"])
+        let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["Close account"])
         XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 5), .completed)
     }
 

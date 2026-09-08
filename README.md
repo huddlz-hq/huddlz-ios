@@ -50,7 +50,7 @@ Design reference: `prototype/issue-1-core-journey`, variant A (cards). The proto
 
 ## Accounts
 
-Open Account from discovery to sign in with an existing Huddlz account. Successful sign-in returns to the current search and filters. Account shows the signed-in name and email and offers sign-out. Registration, password reset, authenticated RSVP, and profile editing remain follow-up work under #3–#5.
+Open Account from discovery to sign in with an existing Huddlz account. Successful sign-in returns to the current search and filters. Compact account sheets use persistent field labels, a show-password control, and a prominent sign-in button. They expand for the keyboard and accessibility text sizes. The signed-in sheet groups initials, name, and email above sign-out. Registration, password reset, authenticated RSVP, and profile editing remain follow-up work under #3–#5.
 
 Authentication uses the dedicated JSON endpoints `POST /api/auth/sign_in`, `GET /api/auth/me`, and `DELETE /api/auth/sign_out`. Requests are cookie-free and do not follow redirects. Only the bearer token is saved, using device-only Keychain storage accessible while unlocked. Passwords are cleared from the form after submission. The app checks a saved session on launch and when it returns to the foreground; expired sessions are removed, while temporary failures offer retry. Sign-out removes the local token before attempting server revocation, with clear feedback if the server cannot be reached. Public discovery remains available without an account.
 
@@ -64,7 +64,7 @@ State timing tests hold and release responses explicitly, so cancellation and ov
 
 Pagination tests scroll through real cards and verify bottom progress, stable scroll position, explicit retry, and continued loading through a repeated batch. State tests cover overlapping requests, the final batch, and old responses arriving after a new search. Pagination observes refresh state in its own footer view; observing it in the view that owns refresh hid the native spinner on iOS 26.5. Discovery uses one lazy stack; nesting it inside a regular stack caused scrolling to hang during layout on iOS 26.5.
 
-Account tests use real Keychain entries with unique test service names, plus HTTP fixtures for the authentication endpoints. UI tests sign in, relaunch, sign out, and retry incorrect credentials; successful test journeys sign out to remove their saved token. State tests verify credentials and bearer headers, session expiry, retry after transient failures, and local sign-out when server revocation fails. Test-session namespaces are excluded from Release builds and never read the normal app session.
+Account tests use real Keychain entries with unique test service names, plus HTTP fixtures for the authentication endpoints. UI tests sign in, show and hide a password without losing it, relaunch, sign out, and retry incorrect credentials; successful test journeys sign out to remove their saved token. State tests verify credentials and bearer headers, session expiry, retry after transient failures, and local sign-out when server revocation fails. Test-session namespaces are excluded from Release builds and never read the normal app session.
 
 Artwork tests send PNG bytes through an HTTP fixture and verify visible image pixels in cards and details. Missing images, failed requests, and unreadable image data retain the event-type illustration. A malformed image URL does not prevent the event from loading.
 
