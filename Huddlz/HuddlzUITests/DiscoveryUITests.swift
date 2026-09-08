@@ -7,6 +7,8 @@ final class DiscoveryUITests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
 
     func testVenueMapAndAddressOpenAppleMaps() {
+        let maps = XCUIApplication(bundleIdentifier: "com.apple.Maps")
+        defer { maps.terminate() }
         for eventType in ["in_person", "hybrid"] {
             let address = "1 Apple Park Way, Cupertino, CA"
             let event = coffee.replacingOccurrences(of: "Juniper Café", with: address)
@@ -28,14 +30,16 @@ final class DiscoveryUITests: XCTestCase {
             let attachment = XCTAttachment(screenshot: app.screenshot())
             attachment.lifetime = .keepAlways
             add(attachment)
+            XCTAssertEqual(app.state, .runningForeground)
+            XCTAssertNotEqual(maps.state, .runningForeground)
             venue.tap()
-            let maps = XCUIApplication(bundleIdentifier: "com.apple.Maps")
-            XCTAssertTrue(maps.wait(for: .runningForeground, timeout: 10))
-            maps.terminate()
+            assertMapsOpened(maps)
         }
     }
 
     func testUnresolvedVenueStillOpensAnAddressSearchInMaps() {
+        let maps = XCUIApplication(bundleIdentifier: "com.apple.Maps")
+        defer { maps.terminate() }
         let address = "Juniper Café"
         let match: [String: Any] = ["name": address, "address": "1 Oak Street", "latitude": 37.3, "longitude": -122.0]
         let lookups: [[[String: Any]]] = [[], [["query": address, "results": []]],
@@ -51,11 +55,24 @@ final class DiscoveryUITests: XCTestCase {
             XCTAssertTrue(venue.waitForExistence(timeout: 5))
             XCTAssertTrue(venue.label.contains(address))
             XCTAssertFalse(app.maps.firstMatch.exists)
+            XCTAssertEqual(app.state, .runningForeground)
+            XCTAssertNotEqual(maps.state, .runningForeground)
             venue.tap()
-            let maps = XCUIApplication(bundleIdentifier: "com.apple.Maps")
-            XCTAssertTrue(maps.wait(for: .runningForeground, timeout: 5))
-            maps.terminate()
+            assertMapsOpened(maps)
         }
+    }
+
+    private func assertMapsOpened(_ maps: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
+        // CI can report Maps' foreground state more than 12 seconds after the tap.
+        // This bounds the native handoff; it does not wait for live Maps results.
+        let opened = maps.wait(for: .runningForeground, timeout: 30)
+        if !opened {
+            let screen = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+            screen.name = "Failed Maps handoff"
+            screen.lifetime = .keepAlways
+            add(screen)
+        }
+        XCTAssertTrue(opened, "Maps did not enter the foreground (state: \(maps.state.rawValue)).", file: file, line: line)
     }
 
     func testOnlineAndUnannouncedLocationsHaveNoMapAction() {
