@@ -17,7 +17,7 @@ struct DiscoveryView: View {
         .onChange(of: searchText) { _, value in
             if value.isEmpty { query.text = "" }
         }
-        .sheet(isPresented: $isShowingAccount) { AccountView() }
+        .sheet(isPresented: $isShowingAccount) { AccountView { query.place = $0 } }
         .sheet(isPresented: $isChoosingLocation) {
             LocationSearchView(place: $query.place)
         }

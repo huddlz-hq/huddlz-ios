@@ -8,10 +8,12 @@ final class PlaceSearchStore {
     private(set) var isLoading = false
     private(set) var didSearch = false
     private(set) var errorMessage: String?
+    private let citiesOnly: Bool
     private var revision = UUID()
     private let fetch: (MKLocalSearch.Request) async throws -> [MKMapItem]
 
-    init(fetch: ((MKLocalSearch.Request) async throws -> [MKMapItem])? = nil) {
+    init(citiesOnly: Bool = false, fetch: ((MKLocalSearch.Request) async throws -> [MKMapItem])? = nil) {
+        self.citiesOnly = citiesOnly
         if let fetch {
             self.fetch = fetch
         } else {
@@ -45,10 +47,11 @@ final class PlaceSearchStore {
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = text
         request.resultTypes = .address
+        if citiesOnly { request.addressFilter = MKAddressFilter(including: [.locality]) }
         do {
             let items = try await fetch(request)
             guard revision == current, !Task.isCancelled else { return }
-            places = items.map { item in
+            places = items.filter { !citiesOnly || $0.timeZone != nil }.map { item in
                 DiscoveryPlace(name: item.address?.fullAddress ?? item.name ?? text,
                                latitude: item.location.coordinate.latitude,
                                longitude: item.location.coordinate.longitude,

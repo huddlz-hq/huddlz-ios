@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct AccountView: View {
+    var onHomeLocationSaved: (DiscoveryPlace) -> Void = { _ in }
     @Environment(AccountStore.self) private var account
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -9,11 +10,23 @@ struct AccountView: View {
     @State private var showsPassword = false
     @State private var isResettingPassword = false
     @State private var isRegistering = false
+    @State private var isChoosingHome = false
     @FocusState private var focusedField: Field?
 
     private enum Field: Hashable { case email, password, visiblePassword }
 
     var body: some View {
+        if isChoosingHome {
+            SignupLocationView { place in
+                if let place { onHomeLocationSaved(place) }
+                dismiss()
+            }
+        } else {
+            accountContent
+        }
+    }
+
+    private var accountContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 HStack(alignment: .top) {
@@ -43,7 +56,7 @@ struct AccountView: View {
                     }
                     .disabled(account.isBusy)
                 } else if isRegistering {
-                    RegistrationForm(email: $email, onSuccess: { dismiss() }, onSignIn: {
+                    RegistrationForm(email: $email, onSuccess: { isChoosingHome = true }, onSignIn: {
                         account.clearMessage()
                         isRegistering = false
                     })
