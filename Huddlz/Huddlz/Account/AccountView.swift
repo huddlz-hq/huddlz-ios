@@ -7,6 +7,7 @@ struct AccountView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var showsPassword = false
+    @State private var isResettingPassword = false
     @FocusState private var focusedField: Field?
 
     private enum Field: Hashable { case email, password, visiblePassword }
@@ -59,9 +60,10 @@ struct AccountView: View {
         }
         .scrollBounceBehavior(.basedOnSize)
         .background(HuddlStyle.background)
-        .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.height(account.user == nil ? 480 : 340), .large])
+        .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.height(account.user == nil ? 540 : 340), .large])
         .presentationDragIndicator(.visible)
         .interactiveDismissDisabled(account.isBusy)
+        .sheet(isPresented: $isResettingPassword) { PasswordResetView(email: $email) }
     }
 
     private var signInForm: some View {
@@ -118,6 +120,16 @@ struct AccountView: View {
             }
             .buttonStyle(.plain)
             .disabled(!canSignIn)
+            Button {
+                focusedField = nil
+                password = ""
+                showsPassword = false
+                isResettingPassword = true
+            } label: {
+                Text("Forgot password?")
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .contentShape(.rect)
+            }
             Text("Browse anytime. Sign in when you’re ready.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)

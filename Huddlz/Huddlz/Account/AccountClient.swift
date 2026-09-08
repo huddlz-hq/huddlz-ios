@@ -47,6 +47,16 @@ struct AccountClient {
         return session
     }
 
+    func requestPasswordReset(email: String) async throws {
+        struct ResetRequest: Encodable { let email: String }
+        var request = URLRequest(url: URL(string: "https://huddlz.com/api/auth/password_reset")!)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.httpBody = try JSONEncoder().encode(ResetRequest(email: email.trimmingCharacters(in: .whitespacesAndNewlines)))
+        _ = try await send(request)
+    }
+
     func currentUser(token: String) async throws -> AccountUser {
         struct Document: Decodable { let user: AccountUser }
         var request = URLRequest(url: URL(string: "https://huddlz.com/api/auth/me")!)
