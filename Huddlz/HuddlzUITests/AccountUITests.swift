@@ -112,6 +112,11 @@ final class AccountUITests: XCTestCase {
         XCTAssertEqual(app.textFields["Email"].value as? String, "neighbor@example.com")
         XCTAssertFalse(app.staticTexts["Our Neighbor"].exists)
         app.secureTextFields["Password"].tap()
+        // Hosted Simulator can drop the first focus tap after keyboard dismissal.
+        if !app.keyboards.firstMatch.waitForExistence(timeout: 2) {
+            app.secureTextFields["Password"].tap()
+        }
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
         app.secureTextFields["Password"].typeText("sample-password\n")
         let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["Close account"])
         XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 5), .completed)
