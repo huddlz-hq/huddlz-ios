@@ -8,6 +8,7 @@ struct AccountView: View {
     @State private var password = ""
     @State private var showsPassword = false
     @State private var isResettingPassword = false
+    @State private var isRegistering = false
     @FocusState private var focusedField: Field?
 
     private enum Field: Hashable { case email, password, visiblePassword }
@@ -16,7 +17,7 @@ struct AccountView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 HStack(alignment: .top) {
-                    Text(account.user == nil ? "Welcome back" : "Your account")
+                    Text(account.user != nil ? "Your account" : (isRegistering ? "Create your account" : "Welcome back"))
                         .font(.largeTitle.bold())
                         .accessibilityAddTraits(.isHeader)
                     Spacer(minLength: 8)
@@ -41,15 +42,20 @@ struct AccountView: View {
                             .contentShape(.rect)
                     }
                     .disabled(account.isBusy)
+                } else if isRegistering {
+                    RegistrationForm(email: $email, onSuccess: { dismiss() }, onSignIn: {
+                        account.clearMessage()
+                        isRegistering = false
+                    })
                 } else {
                     signInForm
                 }
-                if account.isBusy { ProgressView("Please wait…") }
+                if account.isBusy && !isRegistering { ProgressView("Please wait…") }
                 if account.canRetrySession {
                     Button("Try checking account again") { Task { await account.restore() } }
                         .disabled(account.isBusy)
                 }
-                if let message = account.message {
+                if !isRegistering, let message = account.message {
                     Text(message).foregroundStyle(.secondary)
                 }
             }
@@ -60,7 +66,7 @@ struct AccountView: View {
         }
         .scrollBounceBehavior(.basedOnSize)
         .background(HuddlStyle.background)
-        .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.height(account.user == nil ? 540 : 340), .large])
+        .presentationDetents(dynamicTypeSize.isAccessibilitySize || isRegistering ? [.large] : [.height(account.user == nil ? 600 : 340), .large])
         .presentationDragIndicator(.visible)
         .interactiveDismissDisabled(account.isBusy)
         .sheet(isPresented: $isResettingPassword) { PasswordResetView(email: $email) }
@@ -127,6 +133,17 @@ struct AccountView: View {
                 isResettingPassword = true
             } label: {
                 Text("Forgot password?")
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .contentShape(.rect)
+            }
+            Button {
+                focusedField = nil
+                password = ""
+                showsPassword = false
+                account.clearMessage()
+                isRegistering = true
+            } label: {
+                Text("Create an account")
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .contentShape(.rect)
             }
