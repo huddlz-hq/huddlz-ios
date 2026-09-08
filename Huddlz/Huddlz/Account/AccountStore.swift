@@ -79,6 +79,33 @@ final class AccountStore {
         }
     }
 
+    func clearMessage() {
+        guard !isBusy else { return }
+        message = nil
+    }
+
+    func register(displayName: String, email: String, password: String, confirmation: String, legalAcceptance: Bool) async {
+        guard !isBusy, legalAcceptance else { return }
+        isBusy = true
+        message = nil
+        defer { isBusy = false }
+        do {
+            let session = try await client.register(displayName: displayName, email: email, password: password,
+                                                    confirmation: confirmation, legalAcceptance: legalAcceptance)
+            try await tokens.save(session.token)
+            canRetrySession = false
+            user = session.user
+        } catch AccountError.invalidRegistration(let feedback) {
+            message = feedback
+        } catch AccountError.rateLimited {
+            message = "Too many attempts. Please try again later."
+        } catch TokenStoreError.unavailable {
+            message = "Your account was created, but we couldn’t save your sign-in. Please return to sign in."
+        } catch {
+            message = "Couldn’t create your account. Check your connection and try again."
+        }
+    }
+
     func signIn(email: String, password: String) async {
         guard !isBusy else { return }
         isBusy = true
