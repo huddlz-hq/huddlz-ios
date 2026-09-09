@@ -63,6 +63,14 @@ final class AccountStore {
         return defaults
     }
 
+    func attendance(huddlID: String) async throws -> AttendanceState {
+        guard let userID = user?.id, let token = try await tokens.load() else { throw AccountError.unauthorized }
+        let attendance = try await client.attendance(huddlID: huddlID, token: token)
+        guard user?.id == userID else { throw CancellationError() }
+        try Task.checkCancellation()
+        return attendance
+    }
+
     func saveHomeLocation(_ place: DiscoveryPlace) async throws {
         guard !isBusy, let user else { throw AccountError.unavailable }
         isBusy = true

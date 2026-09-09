@@ -157,6 +157,27 @@ struct AccountClient {
         return profile.searchDefaults
     }
 
+    func attendance(huddlID: String, token: String) async throws -> AttendanceState {
+        struct Document: Decodable {
+            struct Resource: Decodable {
+                struct Attributes: Decodable { let attendanceState: AttendanceState }
+                let id: String
+                let attributes: Attributes
+            }
+            let data: Resource
+        }
+        var components = URLComponents(url: URL(string: "https://huddlz.com/api/json/huddlz")!.appending(component: huddlID), resolvingAgainstBaseURL: false)!
+        components.queryItems = [URLQueryItem(name: "fields[huddl]", value: "attendance_state")]
+        var request = URLRequest(url: components.url!)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/vnd.api+json", forHTTPHeaderField: "Accept")
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let document = try decoder.decode(Document.self, from: await send(request))
+        guard document.data.id == huddlID else { throw AccountError.unavailable }
+        return document.data.attributes.attendanceState
+    }
+
     func signOut(token: String) async throws {
         var request = URLRequest(url: URL(string: "https://huddlz.com/api/auth/sign_out")!)
         request.httpMethod = "DELETE"
