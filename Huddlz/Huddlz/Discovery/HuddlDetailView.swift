@@ -15,6 +15,16 @@ struct HuddlDetailView: View {
                         .font(.subheadline.bold()).foregroundStyle(HuddlStyle.accent)
                     Text(huddl.title)
                         .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                    if let hostName = huddl.hostName {
+                        Label {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Hosted by").font(.subheadline).foregroundStyle(.secondary)
+                                Text(hostName).font(.headline)
+                            }
+                        } icon: {
+                            Image(systemName: "person.2.fill").foregroundStyle(HuddlStyle.accent)
+                        }
+                    }
                     if huddl.attributes.lifecycleState == "cancelled" {
                         Label("This huddl has been cancelled", systemImage: "calendar.badge.exclamationmark")
                             .font(.headline)

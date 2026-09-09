@@ -31,7 +31,7 @@ Keep new code grouped by feature as features are added. Add shared UI and networ
 
 ## Public discovery
 
-Browse real huddlz in cards, submit text with the keyboard’s Search action, and filter by event type (all, in person, online, hybrid) and date (all upcoming, this week, this month). Clear the search field to reset the text query. Pull to refresh while keeping the current cards visible. A failed refresh keeps the cards and filters and offers retry. Bottom search uses a native UIKit search bar: in this layout on iOS 26.5, SwiftUI’s searchable integration detaches the refresh control. Keeping search separate preserves native pull-to-refresh feedback. Scroll near the last card to load the next batch. A bottom spinner shows progress; a failed batch keeps the cards and offers retry. Loading stops after the final batch. Opening a card fetches current details separately. Event times display in the event’s time zone.
+Browse real huddlz in cards, submit text with the keyboard’s Search action, and filter by event type (all, in person, online, hybrid) and date (all upcoming, this week, this month). Clear the search field to reset the text query. Pull to refresh while keeping the current cards visible. A failed refresh keeps the cards and filters and offers retry. Bottom search uses a native UIKit search bar: in this layout on iOS 26.5, SwiftUI’s searchable integration detaches the refresh control. Keeping search separate preserves native pull-to-refresh feedback. Scroll near the last card to load the next batch. A bottom spinner shows progress; a failed batch keeps the cards and offers retry. Loading stops after the final batch. Opening a card fetches current details separately. Event times display in the event’s time zone. Details show the hosting group beneath the title. Missing or withheld host information leaves the rest of the details available without a host row.
 
 In-person and hybrid details show a native map when Apple Maps resolves the venue to one result. Tap the address row to open that place in Maps and choose directions. The API currently supplies location text without coordinates; failed, empty, or ambiguous lookups keep the address available as a Maps search. Online events and unannounced locations have no map action. A separate live check on September 7, 2026 resolved both the DOS Coffee address in St. Augustine and the Jacksonville Beach venue to one place in Apple Maps.
 
@@ -40,7 +40,7 @@ Choose Anywhere to search for a city or postal code with Apple Maps. Select a pl
 The client uses anonymous, cookie-free requests to the public JSON API:
 
 - `GET /api/json/huddlz` with `date_filter`, `query`, `event_type`, `search_time_zone`, and `page[limit]`.
-- `GET /api/json/huddlz/{id}` for details.
+- `GET /api/json/huddlz/{id}?include=group&fields[group]=name` for details and the hosting group.
 - Pagination follows same-origin discovery links returned by the API.
 - Location searches add `search_latitude`, `search_longitude`, and `distance_miles`. Relative date filters use the selected place’s time zone when available, otherwise the device’s time zone.
 
@@ -81,6 +81,8 @@ Signup-location tests use native permission prompts and simulated device locatio
 Venue-map UI tests control the external place lookup, render the native map, and tap the address to launch Apple Maps. They cover unavailable and ambiguous lookups and locations that should have no map action. Swift Testing also verifies the exact place coordinates and encoded address sent to Maps. Map tiles and the Maps app remain system services; assertions do not depend on their live search results or tile imagery. Handoff tests allow up to 30 seconds for Maps to enter the foreground and keep it alive between fixture cases, then terminate it at test teardown. CI has delivered its foreground update more than 12 seconds after a tap; short launch deadlines can fail even when the link works. A failed handoff saves a screenshot.
 
 Current-location UI tests use Apple’s simulated device location and real system permission prompts to verify nearby results and denied access. For unavailable-location recovery, the `HUDDLZ_UI_LOCATION_FAIL_FIRST` fixture fails one external Core Location request; the retry uses the real service. This hook requires HTTP fixtures and is excluded from Release builds.
+
+Host behavior tests open a card through the real request, decoding, and UI. They check the matching group name and details with missing or withheld host information. A separate read-only check on September 8, 2026 confirmed the deployed JSON API returns the hosting group with an explicit include.
 
 ## Continuous integration
 

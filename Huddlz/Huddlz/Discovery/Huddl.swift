@@ -3,6 +3,19 @@ import Foundation
 struct Huddl: Identifiable, Decodable, Hashable, Sendable {
     let id: String
     let attributes: Attributes
+    let relationships: Relationships?
+    var hostName: String?
+
+    struct Relationships: Decodable, Hashable, Sendable {
+        let group: Group?
+        struct Group: Decodable, Hashable, Sendable {
+            let data: ResourceIdentifier?
+        }
+        struct ResourceIdentifier: Decodable, Hashable, Sendable {
+            let type: String
+            let id: String
+        }
+    }
 
     struct Attributes: Decodable, Hashable, Sendable {
         let title: String
