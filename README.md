@@ -68,7 +68,7 @@ State timing tests hold and release responses explicitly, so cancellation and ov
 
 Pagination tests scroll through real cards and verify bottom progress, stable scroll position, explicit retry, and continued loading through a repeated batch. State tests cover overlapping requests, the final batch, and old responses arriving after a new search. Pagination observes refresh state in its own footer view; observing it in the view that owns refresh hid the native spinner on iOS 26.5. Discovery uses one lazy stack; nesting it inside a regular stack caused scrolling to hang during layout on iOS 26.5.
 
-Account tests use real Keychain entries with unique test service names, plus HTTP fixtures for the authentication endpoints. UI tests sign in, show and hide a password without losing it, relaunch, sign out, retry incorrect credentials, request password resets with confirmation and error recovery, and register with explicit legal acceptance, correction, and session restoration; successful test journeys sign out to remove their saved token. State tests verify credentials and bearer headers, session expiry, retry after transient failures, and local sign-out when server revocation fails. Test-session namespaces are excluded from Release builds and never read the normal app session.
+Account tests use real Keychain entries with unique test service names, plus HTTP fixtures for the authentication endpoints. UI tests sign in, show and hide a password without losing it, relaunch, sign out, retry incorrect credentials, request password resets with confirmation and error recovery, and register with explicit legal acceptance, correction, and session restoration; successful test journeys sign out to remove their saved token. State tests verify credentials and bearer headers, session expiry, retry after transient failures, and local sign-out when server revocation fails. Test-session namespaces are excluded from Release builds and never read the normal app session. The incorrect-credentials UI test delays the successful retry response and allows up to 30 seconds for the sheet to close. The former five-second deadline failed on CI even though sign-in completed; the wait ends as soon as dismissal occurs.
 
 Artwork tests send PNG bytes through an HTTP fixture and verify visible image pixels in cards and details. Missing images, failed requests, and unreadable image data retain the event-type illustration. A malformed image URL does not prevent the event from loading.
 
@@ -86,10 +86,10 @@ Host behavior tests open a card through the real request, decoding, and UI. They
 
 ## Continuous integration
 
-GitHub Actions runs the full native test suite for pull requests into main and pushes to main. You can also start it from Actions → iOS tests → Run workflow.
+GitHub Actions runs the full native test suite for pull requests into main and pushes to main. Two independent macOS runners run discovery UI tests and the remaining tests at the same time. The remaining group excludes only discovery, so new tests are included automatically. Each runner uses one Simulator and runs its tests serially. The required “Native behavior tests” check passes only when both groups succeed. You can also start it from Actions → iOS tests → Run workflow.
 
 Simulator builds use ad-hoc signing so tests can exercise the real Keychain. Disabling signing prevents Keychain access; no signing certificates or developer team are required for these simulator tests.
 
 The workflow uses Xcode 26.6 and an iPhone 17 simulator running iOS 26.5 on a macOS 26 runner. It uses the shared Huddlz scheme and requires no signing certificates or production credentials. Runner availability is listed in [GitHub’s macOS image documentation](https://github.com/actions/runner-images/blob/main/images/macos/macos-26-Readme.md).
 
-Open the Native behavior tests check on a PR to see the logs. Each run saves an ios-test-results artifact for seven days, including the build log and an .xcresult bundle you can open in Xcode.
+Open Behavior tests (discovery) or Behavior tests (remaining) on a PR to see the Xcode logs. Each group saves an ios-test-results-discovery or ios-test-results-remaining artifact for seven days, including the build log and an .xcresult bundle you can open in Xcode.

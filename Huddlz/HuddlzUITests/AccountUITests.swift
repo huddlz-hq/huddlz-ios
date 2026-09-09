@@ -101,7 +101,7 @@ final class AccountUITests: XCTestCase {
     func testIncorrectCredentialsKeepEmailAndAllowAnotherAttempt() {
         let app = launch(signInResponses: [
             ["status": 401, "body": "{}"],
-            ["status": 200, "body": "{\"token\":\"fixture-token\",\"user\":\(user)}"]
+            ["status": 200, "delaySeconds": 8, "body": "{\"token\":\"fixture-token\",\"user\":\(user)}"]
         ])
         app.buttons["Account"].tap()
         app.textFields["Email"].tap()
@@ -118,8 +118,9 @@ final class AccountUITests: XCTestCase {
         }
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
         app.secureTextFields["Password"].typeText("sample-password\n")
+        // CI can finish sign-in after five seconds. Wait for the outcome, not a speed target.
         let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["Close account"])
-        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 5), .completed)
+        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 30), .completed)
         app.buttons["Account"].tap()
         XCTAssertTrue(app.staticTexts["Our Neighbor"].waitForExistence(timeout: 5))
         signOut(app)
