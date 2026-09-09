@@ -31,7 +31,7 @@ Keep new code grouped by feature as features are added. Add shared UI and networ
 
 ## Public discovery
 
-Browse real huddlz in cards, submit text with the keyboard’s Search action, and filter by event type (all, in person, online, hybrid) and date (all upcoming, this week, this month). Clear the search field to reset the text query. Pull to refresh while keeping the current cards visible. A failed refresh keeps the cards and filters and offers retry. Bottom search uses a native UIKit search bar: in this layout on iOS 26.5, SwiftUI’s searchable integration detaches the refresh control. Keeping search separate preserves native pull-to-refresh feedback. Scroll near the last card to load the next batch. A bottom spinner shows progress; a failed batch keeps the cards and offers retry. Loading stops after the final batch. Opening a card fetches current details separately. Event times display in the event’s time zone. Details show the hosting group beneath the title. Missing or withheld host information leaves the rest of the details available without a host row.
+Browse real huddlz in cards, submit text with the keyboard’s Search action, and filter by event type (all, in person, online, hybrid) and date (all upcoming, this week, this month). Clear the search field to reset the text query. Pull to refresh while keeping the current cards visible. A failed refresh keeps the cards and filters and offers retry. Bottom search uses a native UIKit search bar: in this layout on iOS 26.5, SwiftUI’s searchable integration detaches the refresh control. Keeping search separate preserves native pull-to-refresh feedback. Scroll near the last card to load the next batch. A bottom spinner shows progress; a failed batch keeps the cards and offers retry. Loading stops after the final batch. Opening a card fetches current details separately. Event times display in the event’s time zone. Details show the hosting group beneath the title. Tap it to read the group’s description and location and browse its upcoming huddlz. Native back navigation returns through the group to the original huddl. Empty lists explain that no upcoming huddlz are scheduled; failed requests offer retry. Load more adds the next batch without removing existing cards. Missing or withheld host information leaves the rest of the details available without a host row.
 
 In-person and hybrid details show a native map when Apple Maps resolves the venue to one result. Tap the address row to open that place in Maps and choose directions. The API currently supplies location text without coordinates; failed, empty, or ambiguous lookups keep the address available as a Maps search. Online events and unannounced locations have no map action. A separate live check on September 7, 2026 resolved both the DOS Coffee address in St. Augustine and the Jacksonville Beach venue to one place in Apple Maps.
 
@@ -41,7 +41,9 @@ The client uses anonymous, cookie-free requests to the public JSON API:
 
 - `GET /api/json/huddlz` with `date_filter`, `query`, `event_type`, `search_time_zone`, and `page[limit]`.
 - `GET /api/json/huddlz/{id}?include=group&fields[group]=name` for details and the hosting group.
-- Pagination follows same-origin discovery links returned by the API.
+- `GET /api/json/groups/{id}` for the public group profile.
+- `GET /api/json/huddlz/by_group?group_id={id}&page[limit]=20` for upcoming published group huddlz, ordered by start time.
+- Pagination follows same-origin links returned by the API, restricted to the discovery route or the same group.
 - Location searches add `search_latitude`, `search_longitude`, and `distance_miles`. Relative date filters use the selected place’s time zone when available, otherwise the device’s time zone.
 
 Schema: https://huddlz.com/api/json/open_api; browser docs: https://huddlz.com/api/json/swaggerui. Verified September 8, 2026: the deployed schema exposes field sorting without the former duplicate `sort` parameter, and `sort=starts_at` returns HTTP 200. The app uses default ordering. Group discovery and RSVP remain separate work. Missing thumbnails use an event-type illustration; unavailable host/attendance data is not invented.
@@ -86,7 +88,7 @@ Current-location UI tests use Apple’s simulated device location and real syste
 
 Profile-default tests cover sign-in, relaunch with a changed profile city, explicit location precedence, missing and failed profiles, and signing out during a pending profile request. Held HTTP responses make race tests deterministic. UI tests verify nearby cards, the city and radius controls, and clearing the location. Separate read-only checks verified the deployed profile route rejects anonymous access with 403; authenticated response handling is tested against the documented contract with fixtures, without reading or changing a real profile.
 
-Host behavior tests open a card through the real request, decoding, and UI. They check the matching group name and details with missing or withheld host information. A separate read-only check on September 8, 2026 confirmed the deployed JSON API returns the hosting group with an explicit include.
+Host behavior tests open a card through the real request, decoding, and UI. They check the matching group name and details with missing or withheld host information. Group UI tests cover opening the host, opening another huddl and returning, empty lists, unavailable groups, and retrying initial and later huddl batches. Separate read-only checks on September 9, 2026 returned HTTP 200 for a public group and its 16 upcoming huddlz. No account or profile was changed.
 
 ## Continuous integration
 

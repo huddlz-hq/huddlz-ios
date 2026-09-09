@@ -15,15 +15,24 @@ struct HuddlDetailView: View {
                         .font(.subheadline.bold()).foregroundStyle(HuddlStyle.accent)
                     Text(huddl.title)
                         .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                    if let hostName = huddl.hostName {
-                        Label {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Hosted by").font(.subheadline).foregroundStyle(.secondary)
-                                Text(hostName).font(.headline)
+                    if let hostName = huddl.hostName, let host = huddl.relationships?.group?.data, host.type == "group" {
+                        NavigationLink {
+                            GroupDetailView(id: host.id)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "person.2.fill").foregroundStyle(HuddlStyle.accent)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Hosted by").font(.subheadline).foregroundStyle(.secondary)
+                                    Text(hostName).font(.headline)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right").font(.subheadline).foregroundStyle(.secondary)
                             }
-                        } icon: {
-                            Image(systemName: "person.2.fill").foregroundStyle(HuddlStyle.accent)
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("View group: \(hostName)")
                     }
                     if huddl.attributes.lifecycleState == "cancelled" {
                         Label("This huddl has been cancelled", systemImage: "calendar.badge.exclamationmark")
