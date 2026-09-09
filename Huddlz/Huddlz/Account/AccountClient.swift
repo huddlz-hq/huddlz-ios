@@ -178,6 +178,37 @@ struct AccountClient {
         return document.data.attributes.attendanceState
     }
 
+    func attendances(huddlIDs: Set<String>, token: String) async throws -> [String: AttendanceState] {
+        struct Document: Decodable {
+            struct Resource: Decodable {
+                struct Attributes: Decodable { let attendanceState: AttendanceState? }
+                let id: String
+                let attributes: Attributes
+            }
+            let data: [Resource]
+        }
+        var states: [String: AttendanceState] = [:]
+        let ids = huddlIDs.sorted()
+        for start in stride(from: 0, to: ids.count, by: 20) {
+            let batch = ids[start..<min(start + 20, ids.count)]
+            var components = URLComponents(string: "https://huddlz.com/api/json/huddlz")!
+            components.queryItems = [URLQueryItem(name: "fields[huddl]", value: "attendance_state"),
+                                     URLQueryItem(name: "date_filter", value: "all"),
+                                     URLQueryItem(name: "page[limit]", value: "20")]
+                + batch.map { URLQueryItem(name: "filter[id][in][]", value: $0) }
+            var request = URLRequest(url: components.url!)
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/vnd.api+json", forHTTPHeaderField: "Accept")
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            let document = try decoder.decode(Document.self, from: await send(request))
+            for resource in document.data where batch.contains(resource.id) {
+                states[resource.id] = resource.attributes.attendanceState
+            }
+        }
+        return states
+    }
+
     func signOut(token: String) async throws {
         var request = URLRequest(url: URL(string: "https://huddlz.com/api/auth/sign_out")!)
         request.httpMethod = "DELETE"

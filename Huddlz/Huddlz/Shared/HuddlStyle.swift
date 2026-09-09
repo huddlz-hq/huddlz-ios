@@ -31,10 +31,23 @@ struct HuddlArtwork: View {
 
 struct HuddlCard: View {
     let huddl: Huddl
+    var attendance: AttendanceState? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HuddlArtwork(huddl: huddl)
+            ZStack(alignment: .topTrailing) {
+                HuddlArtwork(huddl: huddl)
+                if attendance == .confirmed || attendance == .waitlisted {
+                    Label(attendance == .confirmed ? "Going" : "Waitlisted",
+                          systemImage: attendance == .confirmed ? "checkmark.circle.fill" : "clock")
+                        .font(.caption.bold())
+                        .foregroundStyle(HuddlStyle.accent)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(.regularMaterial, in: Capsule())
+                        .padding(12)
+                }
+            }
             Text(huddl.attributes.eventType.title)
                 .font(.caption.bold())
                 .foregroundStyle(HuddlStyle.accent)
