@@ -16,7 +16,11 @@ concurrency:
 
 jobs:
   test:
-    name: Native behavior tests
+    name: Behavior tests (${{ matrix.suite }})
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [discovery, remaining]
     runs-on: macos-26
     timeout-minutes: 30
     env:
@@ -42,14 +46,20 @@ jobs:
           xcrun simctl bootstatus "$simulator_id" -b
           echo "HUDDLZ_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
 
-      - name: Run all tests
+      - name: Run behavior tests
         run: |
           set -o pipefail
+          if [[ "${{ matrix.suite }}" == "discovery" ]]; then
+            test_selection=(-only-testing:HuddlzUITests/DiscoveryUITests)
+          else
+            test_selection=(-skip-testing:HuddlzUITests/DiscoveryUITests)
+          fi
           xcodebuild test \
             -project Huddlz/Huddlz.xcodeproj \
             -scheme Huddlz \
             -destination "platform=iOS Simulator,id=$HUDDLZ_SIMULATOR_ID" \
             -parallel-testing-enabled NO \
+            "${test_selection[@]}" \
             -derivedDataPath "$RUNNER_TEMP/HuddlzDerivedData" \
             -resultBundlePath "$RUNNER_TEMP/HuddlzTests.xcresult" \
             CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
@@ -59,8 +69,19 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ios-test-results
+          name: ios-test-results-${{ matrix.suite }}
           path: |
             ${{ runner.temp }}/HuddlzTests.xcresult
             ${{ runner.temp }}/xcodebuild.log
           retention-days: 7
+
+  required-tests:
+    name: Native behavior tests
+    runs-on: ubuntu-latest
+    needs: test
+    if: always()
+    steps:
+      - name: Require every test group to pass
+        env:
+          TEST_RESULT: ${{ needs.test.result }}
+        run: test "$TEST_RESULT" = success
