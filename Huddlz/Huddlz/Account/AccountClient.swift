@@ -178,6 +178,32 @@ struct AccountClient {
         return document.data.attributes.attendanceState
     }
 
+    func joiningLink(huddlID: String, token: String) async throws -> URL? {
+        struct Document: Decodable {
+            struct Resource: Decodable {
+                struct Attributes: Decodable { let visibleVirtualLink: String? }
+                let id: String
+                let attributes: Attributes
+            }
+            let data: Resource
+        }
+        var components = URLComponents(url: URL(string: "https://huddlz.com/api/json/huddlz")!.appending(component: huddlID), resolvingAgainstBaseURL: false)!
+        components.queryItems = [URLQueryItem(name: "fields[huddl]", value: "visible_virtual_link")]
+        var request = URLRequest(url: components.url!)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/vnd.api+json", forHTTPHeaderField: "Accept")
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let document = try decoder.decode(Document.self, from: await send(request))
+        guard document.data.id == huddlID else { throw AccountError.unavailable }
+        guard let value = document.data.attributes.visibleVirtualLink,
+              !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        guard let url = URL(string: value),
+              ["https", "http"].contains(url.scheme?.lowercased() ?? ""),
+              let host = url.host, !host.isEmpty else { throw AccountError.unavailable }
+        return url
+    }
+
     func attendances(huddlIDs: Set<String>, token: String) async throws -> [String: AttendanceState] {
         struct Document: Decodable {
             struct Resource: Decodable {
