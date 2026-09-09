@@ -141,6 +141,22 @@ struct AccountClient {
         return try decoder.decode(Document.self, from: data).user
     }
 
+    func searchDefaults(token: String, userID: String) async throws -> ProfileSearchDefaults {
+        struct Profile: Decodable {
+            let id: String
+            let searchDefaults: ProfileSearchDefaults
+        }
+        var request = URLRequest(url: URL(string: "https://huddlz.com/api/json/profile")!)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let data = try await send(request)
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let profile = try decoder.decode(Profile.self, from: data)
+        guard profile.id == userID else { throw AccountError.unavailable }
+        return profile.searchDefaults
+    }
+
     func signOut(token: String) async throws {
         var request = URLRequest(url: URL(string: "https://huddlz.com/api/auth/sign_out")!)
         request.httpMethod = "DELETE"

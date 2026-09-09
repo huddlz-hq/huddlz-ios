@@ -55,6 +55,14 @@ final class AccountStore {
         }
     }
 
+    func searchDefaults() async throws -> ProfileSearchDefaults? {
+        guard let userID = user?.id, let token = try await tokens.load() else { return nil }
+        let defaults = try await client.searchDefaults(token: token, userID: userID)
+        guard user?.id == userID else { throw CancellationError() }
+        try Task.checkCancellation()
+        return defaults
+    }
+
     func saveHomeLocation(_ place: DiscoveryPlace) async throws {
         guard !isBusy, let user else { throw AccountError.unavailable }
         isBusy = true

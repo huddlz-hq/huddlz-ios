@@ -5,7 +5,8 @@ struct DiscoveryView: View {
     @State private var isShowingAccount = false
     @State private var store = DiscoveryStore()
     @State private var searchText = ""
-    @State private var query = DiscoveryQuery()
+    @State private var preferences = DiscoveryPreferences()
+    @Environment(AccountStore.self) private var account
     @State private var reload = UUID()
     @State private var isChoosingLocation = false
     @State private var visibleHuddlIDs: Set<Huddl.ID> = []
@@ -15,11 +16,12 @@ struct DiscoveryView: View {
             discoveryContent
         }
         .onChange(of: searchText) { _, value in
-            if value.isEmpty { query.text = "" }
+            if value.isEmpty { preferences.query.text = "" }
         }
-        .sheet(isPresented: $isShowingAccount) { AccountView { query.place = $0 } }
+        .task(id: account.user?.id) { await preferences.loadProfile(for: account) }
+        .sheet(isPresented: $isShowingAccount) { AccountView { preferences.selectPlace($0) } }
         .sheet(isPresented: $isChoosingLocation) {
-            LocationSearchView(place: $query.place)
+            LocationSearchView(place: Binding(get: { preferences.query.place }, set: { preferences.selectPlace($0) }))
         }
     }
 
@@ -51,18 +53,18 @@ struct DiscoveryView: View {
         }
         .background(HuddlStyle.background)
         .toolbar(horizontalSizeClass == .compact ? .hidden : .automatic, for: .navigationBar)
-        .task(id: query) { await store.search(query) }
+        .task(id: preferences.query) { await store.search(preferences.query) }
         .task(id: reload) {
             // The initial request is owned by the query task.
-            if didRequestRetry { await store.search(query) }
+            if didRequestRetry { await store.search(preferences.query) }
         }
         .safeAreaInset(edge: .bottom) {
-            DiscoverySearchBar(text: $searchText) { query.text = searchText }
+            DiscoverySearchBar(text: $searchText) { preferences.query.text = searchText }
                 .frame(height: 56)
                 .padding(.horizontal, 12)
                 .padding(.bottom, 8)
         }
-        .refreshable { await store.refresh(query) }
+        .refreshable { await store.refresh(preferences.query) }
         .navigationDestination(for: Huddl.ID.self) { HuddlDetailView(id: $0) }
     }
 
@@ -71,24 +73,24 @@ struct DiscoveryView: View {
     private var locationFilter: some View {
         VStack(alignment: .leading, spacing: 8) {
             Button { isChoosingLocation = true } label: {
-                Label(query.place?.name ?? "Anywhere", systemImage: "mappin.and.ellipse")
+                Label(preferences.query.place?.name ?? "Anywhere", systemImage: "mappin.and.ellipse")
                     .multilineTextAlignment(.leading)
                     .frame(minHeight: 32)
             }
-            .accessibilityLabel("Location: \(query.place?.name ?? "Anywhere")")
-            if query.place != nil {
+            .accessibilityLabel("Location: \(preferences.query.place?.name ?? "Anywhere")")
+            if preferences.query.place != nil {
                 HStack {
                     Menu {
-                        Picker("Distance", selection: $query.distanceMiles) {
+                        Picker("Distance", selection: $preferences.query.distanceMiles) {
                             ForEach([5, 10, 25, 50, 100], id: \.self) { miles in
                                 Text("\(miles) miles").tag(miles)
                             }
                         }
                     } label: {
-                        Text("Within \(query.distanceMiles) miles").frame(minHeight: 32)
+                        Text("Within \(preferences.query.distanceMiles) miles").frame(minHeight: 32)
                     }
-                    .accessibilityLabel("Distance: \(query.distanceMiles) miles")
-                    Button("Clear location") { query.place = nil }
+                    .accessibilityLabel("Distance: \(preferences.query.distanceMiles) miles")
+                    Button("Clear location") { preferences.selectPlace(nil) }
                         .frame(minHeight: 32)
                 }
             }
@@ -106,27 +108,27 @@ struct DiscoveryView: View {
 
     private var dateFilter: some View {
         Menu {
-            Picker("When", selection: $query.dates) {
+            Picker("When", selection: $preferences.query.dates) {
                 ForEach(DiscoveryDates.allCases) { date in Text(date.title).tag(date) }
             }
         } label: {
-            Label(query.dates.title, systemImage: "calendar")
+            Label(preferences.query.dates.title, systemImage: "calendar")
                 .frame(minHeight: 32)
         }
-        .accessibilityLabel("When: \(query.dates.title)")
+        .accessibilityLabel("When: \(preferences.query.dates.title)")
     }
 
     private var typeFilter: some View {
         Menu {
-            Picker("Event type", selection: $query.eventType) {
+            Picker("Event type", selection: $preferences.query.eventType) {
                 Text("All types").tag(nil as EventType?)
                 ForEach(EventType.allCases) { type in Text(type.title).tag(Optional(type)) }
             }
         } label: {
-            Label(query.eventType?.title ?? "All types", systemImage: "person.2")
+            Label(preferences.query.eventType?.title ?? "All types", systemImage: "person.2")
                 .frame(minHeight: 32)
         }
-        .accessibilityLabel("Event type: \(query.eventType?.title ?? "All types")")
+        .accessibilityLabel("Event type: \(preferences.query.eventType?.title ?? "All types")")
     }
 
     @ViewBuilder private var results: some View {
@@ -138,7 +140,7 @@ struct DiscoveryView: View {
                     Text("Couldn’t refresh huddlz.").font(.headline)
                     Text(message).foregroundStyle(.secondary)
                     Button("Try refreshing again") {
-                        Task { await store.refresh(query) }
+                        Task { await store.refresh(preferences.query) }
                     }
                     .buttonStyle(.bordered)
                 }
@@ -162,12 +164,12 @@ struct DiscoveryView: View {
             ContentUnavailableView {
                 Label("No huddlz found", systemImage: "magnifyingglass")
             } description: {
-                Text(query.place == nil
+                Text(preferences.query.place == nil
                      ? "Try another search, a different event type, or a wider date range."
                      : "Try a wider distance, another place, or different search filters.")
             } actions: {
-                if query != DiscoveryQuery() {
-                    Button("Clear search and filters") { searchText = ""; query = DiscoveryQuery() }
+                if preferences.query != DiscoveryQuery() {
+                    Button("Clear search and filters") { searchText = ""; preferences.selectPlace(nil); preferences.query = DiscoveryQuery() }
                 }
             }
         } else {
