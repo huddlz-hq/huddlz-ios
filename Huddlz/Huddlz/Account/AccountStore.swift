@@ -71,6 +71,14 @@ final class AccountStore {
         return attendance
     }
 
+    func joiningLink(huddlID: String) async throws -> URL? {
+        guard let userID = user?.id, let token = try await tokens.load() else { throw AccountError.unauthorized }
+        let link = try await client.joiningLink(huddlID: huddlID, token: token)
+        guard user?.id == userID else { throw CancellationError() }
+        try Task.checkCancellation()
+        return link
+    }
+
     func attendances(huddlIDs: Set<String>) async throws -> [String: AttendanceState] {
         guard let userID = user?.id, let token = try await tokens.load() else { throw AccountError.unauthorized }
         let states = try await client.attendances(huddlIDs: huddlIDs, token: token)

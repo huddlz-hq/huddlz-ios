@@ -62,8 +62,7 @@ struct HuddlDetailView: View {
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
                     if huddl.attributes.eventType != .inPerson {
-                        Text("Online joining details are shared with confirmed attendees.")
-                            .font(.subheadline).foregroundStyle(.secondary)
+                        HuddlJoiningView(id: id)
                     }
                 } else if let errorMessage {
                     ContentUnavailableView {
