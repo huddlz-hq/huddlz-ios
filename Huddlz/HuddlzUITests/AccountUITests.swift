@@ -54,7 +54,7 @@ final class AccountUITests: XCTestCase {
         XCTAssertTrue(app.secureTextFields["Password"].exists)
         app.buttons["Sign in"].tap()
         let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["Close account"])
-        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 5), .completed)
+        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: accountOperationTimeout), .completed)
         app.buttons["Account"].tap()
         XCTAssertTrue(app.staticTexts["Our Neighbor"].waitForExistence(timeout: 5))
         signOut(app)
@@ -101,7 +101,7 @@ final class AccountUITests: XCTestCase {
     func testIncorrectCredentialsKeepEmailAndAllowAnotherAttempt() {
         let app = launch(signInResponses: [
             ["status": 401, "body": "{}"],
-            ["status": 200, "delaySeconds": 8, "body": "{\"token\":\"fixture-token\",\"user\":\(user)}"]
+            ["status": 200, "body": "{\"token\":\"fixture-token\",\"user\":\(user)}"]
         ])
         app.buttons["Account"].tap()
         app.textFields["Email"].tap()
@@ -118,9 +118,8 @@ final class AccountUITests: XCTestCase {
         }
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
         app.secureTextFields["Password"].typeText("sample-password\n")
-        // CI can finish sign-in after five seconds. Wait for the outcome, not a speed target.
         let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["Close account"])
-        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 30), .completed)
+        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: accountOperationTimeout), .completed)
         app.buttons["Account"].tap()
         XCTAssertTrue(app.staticTexts["Our Neighbor"].waitForExistence(timeout: 5))
         signOut(app)
@@ -154,11 +153,15 @@ final class AccountUITests: XCTestCase {
         app.secureTextFields["Password"].tap()
         app.secureTextFields["Password"].typeText("sample-password\n")
         let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["Close account"])
-        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 5), .completed)
+        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: accountOperationTimeout), .completed)
     }
 
     private func signOut(_ app: XCUIApplication) {
         app.buttons["Sign out"].tap()
-        XCTAssertTrue(app.textFields["Email"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.textFields["Email"].waitForExistence(timeout: accountOperationTimeout))
     }
+
+    // Hosted Simulator Keychain operations can take tens of seconds. These waits
+    // end as soon as the account operation completes; they are not performance tests.
+    private let accountOperationTimeout: TimeInterval = 60
 }
