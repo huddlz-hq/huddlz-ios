@@ -4,6 +4,8 @@ struct DiscoveryView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var isShowingAccount = false
     @State private var store = DiscoveryStore()
+    @State private var badges = SearchBadgeStore()
+    @State private var badgeRefresh = UUID()
     @State private var searchText = ""
     @State private var preferences = DiscoveryPreferences()
     @Environment(AccountStore.self) private var account
@@ -52,6 +54,7 @@ struct DiscoveryView: View {
             .frame(maxWidth: .infinity)
         }
         .background(HuddlStyle.background)
+        .background { SearchBadgeLoader(store: badges, huddlIDs: visibleHuddlIDs, refresh: badgeRefresh) }
         .toolbar(horizontalSizeClass == .compact ? .hidden : .automatic, for: .navigationBar)
         .task(id: preferences.query) { await store.search(preferences.query) }
         .task(id: reload) {
@@ -64,8 +67,13 @@ struct DiscoveryView: View {
                 .padding(.horizontal, 12)
                 .padding(.bottom, 8)
         }
-        .refreshable { await store.refresh(preferences.query) }
+        .refreshable { await refresh() }
         .navigationDestination(for: Huddl.ID.self) { HuddlDetailView(id: $0) }
+    }
+
+    private func refresh() async {
+        await store.refresh(preferences.query)
+        badgeRefresh = UUID()
     }
 
     @State private var didRequestRetry = false
@@ -140,7 +148,7 @@ struct DiscoveryView: View {
                     Text("Couldn’t refresh huddlz.").font(.headline)
                     Text(message).foregroundStyle(.secondary)
                     Button("Try refreshing again") {
-                        Task { await store.refresh(preferences.query) }
+                        Task { await refresh() }
                     }
                     .buttonStyle(.bordered)
                 }
@@ -175,7 +183,7 @@ struct DiscoveryView: View {
         } else {
             Group {
                 ForEach(store.huddlz) { huddl in
-                    NavigationLink(value: huddl.id) { HuddlCard(huddl: huddl) }
+                    NavigationLink(value: huddl.id) { SearchBadgeCard(huddl: huddl, store: badges) }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("huddl-\(huddl.id)")
                         .onScrollVisibilityChange(threshold: 0.1) { visible in
