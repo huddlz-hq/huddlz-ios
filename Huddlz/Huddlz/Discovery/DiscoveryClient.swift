@@ -60,8 +60,17 @@ struct DiscoveryClient {
     }
 
     func detail(id: Huddl.ID) async throws -> Huddl {
-        let document: DetailDocument = try await get(baseURL.appending(path: "api/json/huddlz").appending(component: id))
-        return document.data
+        var components = URLComponents(url: baseURL.appending(path: "api/json/huddlz").appending(component: id), resolvingAgainstBaseURL: false)!
+        components.queryItems = [
+            URLQueryItem(name: "include", value: "group"),
+            URLQueryItem(name: "fields[group]", value: "name")
+        ]
+        let document: DetailDocument = try await get(components.url!)
+        var huddl = document.data
+        if let host = huddl.relationships?.group?.data, host.type == "group" {
+            huddl.hostName = document.included?.first { $0.type == host.type && $0.id == host.id }?.attributes?.name
+        }
+        return huddl
     }
 
     private func get<Value: Decodable>(_ url: URL) async throws -> Value {
@@ -94,7 +103,17 @@ struct DiscoveryClient {
         let links: Links?
         struct Links: Decodable { let next: URL? }
     }
-    private struct DetailDocument: Decodable { let data: Huddl }
+    private struct DetailDocument: Decodable {
+        let data: Huddl
+        let included: [IncludedResource]?
+
+        struct IncludedResource: Decodable {
+            let type: String
+            let id: String
+            let attributes: Attributes?
+            struct Attributes: Decodable { let name: String? }
+        }
+    }
 }
 
 enum DiscoveryError: LocalizedError {

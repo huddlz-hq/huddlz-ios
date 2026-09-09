@@ -6,6 +6,40 @@ import Synchronization
 final class DiscoveryUITests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
 
+    func testOpeningAHuddlShowsItsHostingGroup() {
+        let event = coffee.dropLast() + #", "relationships":{"group":{"data":{"type":"group","id":"neighbors"}}}}"#
+        let detail = """
+        {"data":\(event),"included":[
+          {"type":"group","id":"other","attributes":{"name":"Other group"}},
+          {"type":"group","id":"neighbors","attributes":{"name":"Juniper Neighbors"}}
+        ]}
+        """
+        let app = launch(routes: [
+            route(body: page([coffee])),
+            route(path: "/api/json/huddlz/coffee", query: ["include": "group", "fields[group]": "name"], body: detail),
+            route(path: "/api/json/huddlz/coffee", body: "{\"data\":\(coffee)}")
+        ])
+        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
+        app.buttons["huddl-coffee"].tap()
+        XCTAssertTrue(app.staticTexts["Hosted by"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Juniper Neighbors"].exists)
+        XCTAssertFalse(app.staticTexts["Other group"].exists)
+    }
+
+    func testUnavailableOrMissingHostKeepsDetailsWithoutAHostRow() {
+        let hidden = coffee.dropLast() + #", "relationships":{"group":{"data":null}}}"#
+        for event in [String(hidden), coffee] {
+            let app = launch(routes: [
+                route(body: page([coffee])),
+                route(path: "/api/json/huddlz/coffee", body: "{\"data\":\(event)}")
+            ])
+            XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
+            app.buttons["huddl-coffee"].tap()
+            XCTAssertTrue(app.staticTexts["Bring a mug and meet your neighbors."].waitForExistence(timeout: 5))
+            XCTAssertFalse(app.staticTexts["Hosted by"].exists)
+        }
+    }
+
     func testVenueMapAndAddressOpenAppleMaps() {
         let maps = XCUIApplication(bundleIdentifier: "com.apple.Maps")
         defer { maps.terminate() }
