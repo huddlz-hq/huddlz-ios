@@ -33,7 +33,7 @@ struct HuddlJoiningView: View {
                     .font(.subheadline).foregroundStyle(.secondary)
             }
         }
-        .task(id: RequestID(id: id, userID: account.user?.id, phase: phase, retry: retry)) {
+        .task(id: RequestID(id: id, userID: account.user?.id, phase: phase, retry: retry, attendanceRevision: account.attendanceRevision)) {
             link = nil
             loadedUserID = nil
             failed = false
@@ -56,5 +56,6 @@ struct HuddlJoiningView: View {
         let userID: String?
         let phase: ScenePhase
         let retry: UUID
+        let attendanceRevision: UUID
     }
 }

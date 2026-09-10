@@ -51,7 +51,7 @@ struct SearchBadgeLoader: View {
         Color.clear
             .allowsHitTesting(false)
             .accessibilityHidden(true)
-            .task(id: RequestID(userID: account.user?.id, huddlIDs: huddlIDs, phase: phase, refresh: refresh)) {
+            .task(id: RequestID(userID: account.user?.id, huddlIDs: huddlIDs, phase: phase, refresh: refresh, attendanceRevision: account.attendanceRevision)) {
                 store.clear()
                 guard phase == .active, account.user != nil, !huddlIDs.isEmpty else { return }
                 // Combine visibility updates during scrolling into one request.
@@ -66,5 +66,6 @@ struct SearchBadgeLoader: View {
         let huddlIDs: Set<String>
         let phase: ScenePhase
         let refresh: UUID
+        let attendanceRevision: UUID
     }
 }

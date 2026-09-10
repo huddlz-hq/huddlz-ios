@@ -178,6 +178,55 @@ struct AccountClient {
         return document.data.attributes.attendanceState
     }
 
+    func changeAttendance(huddlID: String, action: RSVPAction, token: String) async throws -> AttendanceState {
+        struct Document: Decodable {
+            struct Resource: Decodable {
+                struct Attributes: Decodable { let attendanceState: AttendanceState }
+                let id: String
+                let attributes: Attributes
+            }
+            let data: Resource
+        }
+        var components = URLComponents(url: URL(string: "https://huddlz.com/api/json/huddlz")!
+            .appending(component: huddlID).appending(component: action.rawValue), resolvingAgainstBaseURL: false)!
+        components.queryItems = [URLQueryItem(name: "fields[huddl]", value: "attendance_state")]
+        var request = URLRequest(url: components.url!)
+        request.httpMethod = "PATCH"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/vnd.api+json", forHTTPHeaderField: "Accept")
+        request.setValue("application/vnd.api+json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["data": ["type": "huddl", "id": huddlID, "attributes": [:]]])
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let (data, response) = try await fetch(request)
+        try Task.checkCancellation()
+        guard let response = response as? HTTPURLResponse else { throw AccountError.unavailable }
+        switch response.statusCode {
+        case 200..<300: break
+        case 401: throw AccountError.unauthorized
+        case 403, 404: throw RSVPError(message: "This huddl isn’t accepting RSVP changes.")
+        case 400, 422:
+            struct Errors: Decodable {
+                struct Detail: Decodable { let detail: String?; let message: String? }
+                let errors: [Detail]
+            }
+            let messages = (try? JSONDecoder().decode(Errors.self, from: data))?.errors.compactMap {
+                ($0.detail ?? $0.message)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            let readable = messages.flatMap { messages in
+                !messages.isEmpty && messages.allSatisfy {
+                    !$0.isEmpty && $0.count <= 240 && $0.rangeOfCharacter(from: .controlCharacters) == nil
+                } ? messages.joined(separator: "\n") : nil
+            }
+            throw RSVPError(message: readable ?? "This huddl isn’t accepting RSVP changes.")
+        case 429: throw RSVPError(message: "Too many attempts. Please wait a moment and try again.")
+        default: throw AccountError.unavailable
+        }
+        let document = try decoder.decode(Document.self, from: data)
+        guard document.data.id == huddlID else { throw AccountError.unavailable }
+        return document.data.attributes.attendanceState
+    }
+
     func joiningLink(huddlID: String, token: String) async throws -> URL? {
         struct Document: Decodable {
             struct Resource: Decodable {
@@ -282,4 +331,14 @@ private final class AccountRedirectPolicy: NSObject, URLSessionTaskDelegate, @un
                     completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
         completionHandler(nil)
     }
+}
+
+enum RSVPAction: String {
+    case reserve = "rsvp"
+    case cancel = "cancel_rsvp"
+}
+
+struct RSVPError: LocalizedError {
+    let message: String
+    var errorDescription: String? { message }
 }
