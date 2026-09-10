@@ -35,16 +35,31 @@ jobs:
           xcodebuild -version
           xcrun simctl list devices available
 
-      - name: Wait for Simulator readiness
-        timeout-minutes: 5
+      - name: Start Simulator
+        timeout-minutes: 2
         run: |
           simulator_id="$(xcrun simctl list devices available --json | jq -er '
             .devices["com.apple.CoreSimulator.SimRuntime.iOS-26-5"]
             | map(select(.name == "iPhone 17"))
             | if length == 1 then .[0].udid else error("Expected one iPhone 17 simulator") end
           ')"
-          xcrun simctl bootstatus "$simulator_id" -b
+          xcrun simctl boot "$simulator_id"
           echo "HUDDLZ_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
+
+      - name: Build tests while Simulator starts
+        run: |
+          set -o pipefail
+          xcodebuild build-for-testing \
+            -project Huddlz/Huddlz.xcodeproj \
+            -scheme Huddlz \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/HuddlzDerivedData" \
+            CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
+            2>&1 | tee "$RUNNER_TEMP/build.log"
+
+      - name: Wait for Simulator readiness
+        timeout-minutes: 5
+        run: xcrun simctl bootstatus "$HUDDLZ_SIMULATOR_ID" -b
 
       - name: Run behavior tests
         env:
@@ -56,7 +71,7 @@ jobs:
           while IFS= read -r argument; do
             test_selection+=("$argument")
           done <<< "$selection"
-          xcodebuild test \
+          xcodebuild test-without-building \
             -project Huddlz/Huddlz.xcodeproj \
             -scheme Huddlz \
             -destination "platform=iOS Simulator,id=$HUDDLZ_SIMULATOR_ID" \
@@ -88,6 +103,7 @@ jobs:
           name: ios-test-results-${{ matrix.suite }}
           path: |
             ${{ runner.temp }}/HuddlzTests.xcresult
+            ${{ runner.temp }}/build.log
             ${{ runner.temp }}/xcodebuild.log
             ${{ runner.temp }}/test-summary.json
           retention-days: 7
