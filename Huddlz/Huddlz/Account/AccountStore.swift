@@ -5,10 +5,14 @@ import Observation
 @MainActor
 @Observable
 final class AccountStore {
-    private(set) var user: AccountUser?
+    private(set) var user: AccountUser? {
+        didSet { if oldValue?.id != user?.id { sessionRevision = UUID() } }
+    }
+    private var sessionRevision = UUID()
     private(set) var isBusy = false
     private(set) var message: String?
     private(set) var canRetrySession = false
+    private(set) var attendanceRevision = UUID()
     private let tokens: SessionTokenStore
     private let client: AccountClient
 
@@ -69,6 +73,29 @@ final class AccountStore {
         guard user?.id == userID else { throw CancellationError() }
         try Task.checkCancellation()
         return attendance
+    }
+
+    func changeAttendance(huddlID: String, action: RSVPAction) async throws -> AttendanceState {
+        let session = sessionRevision
+        guard let userID = user?.id, let token = try await tokens.load() else { throw AccountError.unauthorized }
+        guard session == sessionRevision else { throw CancellationError() }
+        do {
+            let attendance = try await client.changeAttendance(huddlID: huddlID, action: action, token: token)
+            guard user?.id == userID, session == sessionRevision else { throw CancellationError() }
+            try Task.checkCancellation()
+            attendanceRevision = UUID()
+            return attendance
+        } catch AccountError.unauthorized {
+            guard user?.id == userID, session == sessionRevision else { throw CancellationError() }
+            isBusy = true
+            defer { isBusy = false }
+            user = nil
+            try? await tokens.clear()
+            throw RSVPError(message: "Your session expired. Please sign in again.")
+        } catch {
+            guard user?.id == userID, session == sessionRevision else { throw CancellationError() }
+            throw error
+        }
     }
 
     func joiningLink(huddlID: String) async throws -> URL? {
@@ -135,6 +162,7 @@ final class AccountStore {
             try await tokens.save(session.token)
             canRetrySession = false
             user = session.user
+            sessionRevision = UUID()
         } catch AccountError.invalidRegistration(let feedback) {
             message = feedback
         } catch AccountError.rateLimited {
@@ -156,6 +184,7 @@ final class AccountStore {
             try await tokens.save(session.token)
             canRetrySession = false
             user = session.user
+            sessionRevision = UUID()
         } catch TokenStoreError.unavailable {
             message = "Couldn’t save your session securely. Please try again."
         } catch AccountError.unauthorized {

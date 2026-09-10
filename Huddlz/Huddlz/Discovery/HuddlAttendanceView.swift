@@ -22,21 +22,35 @@ enum AttendanceState: String, Decodable {
 
 struct HuddlAttendanceView: View {
     let id: String
+    let lifecycleState: String
+    let endsAt: Date
     @Environment(AccountStore.self) private var account
     @Environment(\.scenePhase) private var scenePhase
-    @State private var attendance: AttendanceState?
-    @State private var loadedUserID: String?
-    @State private var loadFailed = false
+    @State private var status = HuddlAttendanceStore()
     @State private var retry = UUID()
+    @State private var showsAccount = false
 
     var body: some View {
-        Group {
+        VStack(alignment: .leading, spacing: 12) {
             if let user = account.user {
-                if loadedUserID == user.id, let attendance {
-                    Label(attendance.title, systemImage: attendance.symbol)
-                        .font(.headline)
-                        .foregroundStyle(HuddlStyle.accent)
-                } else if loadedUserID == user.id, loadFailed {
+                if status.loadedUserID == user.id, let attendance = status.attendance {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label(attendance.title, systemImage: attendance.symbol)
+                            .font(.headline)
+                            .foregroundStyle(HuddlStyle.accent)
+                        if acceptsChanges {
+                            Button(attendance == .none ? "RSVP" : (attendance == .waitlisted ? "Leave waitlist" : "Cancel RSVP")) {
+                                guard acceptsChanges else { return }
+                                Task { await status.change(huddlID: id, action: attendance == .none ? .reserve : .cancel, account: account) }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(status.isChanging)
+                        } else {
+                            Text("RSVPs are closed for this huddl.").foregroundStyle(.secondary)
+                        }
+                        if status.isChanging { ProgressView("Updating RSVP…") }
+                    }
+                } else if status.loadedUserID == user.id, status.loadFailed {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Couldn’t check your RSVP.").foregroundStyle(.secondary)
                         Button("Try checking RSVP again") { retry = UUID() }.buttonStyle(.bordered)
@@ -44,25 +58,24 @@ struct HuddlAttendanceView: View {
                 } else {
                     ProgressView("Checking your RSVP…")
                 }
+            } else if !acceptsChanges {
+                Text("RSVPs are closed for this huddl.").foregroundStyle(.secondary)
+            } else {
+                Button("Sign in to RSVP") { showsAccount = true }.buttonStyle(.borderedProminent)
             }
+            if let actionError = status.actionError { Text(actionError).foregroundStyle(.secondary) }
         }
+        .sheet(isPresented: $showsAccount) { AccountView() }
         .task(id: RequestID(userID: account.user?.id, phase: scenePhase, retry: retry)) {
-            attendance = nil
-            loadFailed = false
-            loadedUserID = nil
-            guard scenePhase == .active, let userID = account.user?.id else { return }
-            do {
-                let result = try await account.attendance(huddlID: id)
-                guard !Task.isCancelled else { return }
-                attendance = result
-                loadedUserID = userID
-            } catch {
-                guard !Task.isCancelled else { return }
-                loadFailed = true
-                loadedUserID = userID
+            if scenePhase == .active {
+                await status.load(huddlID: id, account: account)
+            } else {
+                status.clear()
             }
         }
     }
+
+    private var acceptsChanges: Bool { lifecycleState == "published" && endsAt > Date.now }
 
     private struct RequestID: Equatable {
         let userID: String?

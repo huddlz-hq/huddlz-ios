@@ -15,7 +15,7 @@ struct HuddlDetailView: View {
                         .font(.subheadline.bold()).foregroundStyle(HuddlStyle.accent)
                     Text(huddl.title)
                         .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                    HuddlAttendanceView(id: id)
+                    HuddlAttendanceView(id: id, lifecycleState: huddl.attributes.lifecycleState, endsAt: huddl.attributes.endsAt)
                     if let hostName = huddl.hostName, let host = huddl.relationships?.group?.data, host.type == "group" {
                         NavigationLink {
                             GroupDetailView(id: host.id)
