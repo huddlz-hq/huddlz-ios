@@ -53,6 +53,7 @@ jobs:
             -project Huddlz/Huddlz.xcodeproj \
             -scheme Huddlz \
             -destination 'generic/platform=iOS Simulator' \
+            ARCHS="$(uname -m)" \
             -derivedDataPath "$RUNNER_TEMP/HuddlzDerivedData" \
             CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
             2>&1 | tee "$RUNNER_TEMP/build.log"
