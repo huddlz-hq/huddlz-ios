@@ -108,6 +108,8 @@ Search-badge tests cover going, waitlisted, and unmarked cards, foreground and p
 
 GitHub Actions runs the full native test suite for pull requests into main and pushes to main. Four independent macOS runners each use one Simulator with serial test execution. `scripts/ci-test-selection.py` assigns classes to accounts, RSVP/discovery, location/joining, and remaining. The remaining group runs the Swift integration target and everything not assigned to another group, so future tests are included automatically. Duplicate class assignments are rejected.
 
+Each runner starts its Simulator before building the tests for the generic iOS Simulator destination. Simulator startup and compilation overlap. After the build, CI waits for Simulator readiness and runs `test-without-building` against the same build products. Separate workflow steps show build time, any remaining readiness wait, and test time; artifacts include both build and test logs.
+
 The groups were balanced using main's CI run 34439192628: roughly 392–404 seconds of UI test execution per group, before runner setup and build time. Rebalance from recorded timings as the suite grows. Each group must run tests, pass, and report no skips. The required “Native behavior tests” check passes only when all four groups succeed. You can also start it from Actions → iOS tests → Run workflow.
 
 Simulator builds use ad-hoc signing so tests can exercise the real Keychain. Disabling signing prevents Keychain access; no signing certificates or developer team are required for these simulator tests.
