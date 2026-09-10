@@ -106,13 +106,15 @@ Search-badge tests cover going, waitlisted, and unmarked cards, foreground and p
 
 ## Continuous integration
 
-GitHub Actions runs the full native test suite for pull requests into main and pushes to main. Two independent macOS runners run discovery UI tests and the remaining tests at the same time. The discovery group includes all five discovery UI classes; the remaining group excludes those same classes, so every other new test is included automatically. Each runner uses one Simulator and runs its tests serially. The required “Native behavior tests” check passes only when both groups succeed. You can also start it from Actions → iOS tests → Run workflow.
+GitHub Actions runs the full native test suite for pull requests into main and pushes to main. Four independent macOS runners each use one Simulator with serial test execution. `scripts/ci-test-selection.py` assigns classes to accounts, RSVP/discovery, location/joining, and remaining. The remaining group runs the Swift integration target and everything not assigned to another group, so future tests are included automatically. Duplicate class assignments are rejected.
+
+The groups were balanced using main's CI run 34439192628: roughly 392–404 seconds of UI test execution per group, before runner setup and build time. Rebalance from recorded timings as the suite grows. Each group must run tests, pass, and report no skips. The required “Native behavior tests” check passes only when all four groups succeed. You can also start it from Actions → iOS tests → Run workflow.
 
 Simulator builds use ad-hoc signing so tests can exercise the real Keychain. Disabling signing prevents Keychain access; no signing certificates or developer team are required for these simulator tests.
 
 The workflow uses Xcode 26.6 and an iPhone 17 simulator running iOS 26.5 on a macOS 26 runner. It uses the shared Huddlz scheme and requires no signing certificates or production credentials. Runner availability is listed in [GitHub’s macOS image documentation](https://github.com/actions/runner-images/blob/main/images/macos/macos-26-Readme.md).
 
-Open Behavior tests (discovery) or Behavior tests (remaining) on a PR to see the Xcode logs. Each group saves an ios-test-results-discovery or ios-test-results-remaining artifact for seven days, including the build log and an .xcresult bundle you can open in Xcode.
+Open any Behavior tests group on a PR to see its Xcode logs. Each group saves an `ios-test-results-<group>` artifact for seven days, including the build log, test summary, and an `.xcresult` bundle you can open in Xcode.
 
 Joining integration tests cover opening the system browser, hybrid organizer access without an RSVP, revoked access on app return, sign-out, retry, and the absence of an online section for in-person events. Held HTTP responses verify sign-out discards a pending link; malformed URLs and responses for another huddl cannot produce an action. The client requests `visible_virtual_link` through an authenticated, cookie-free sparse detail request and accepts absolute HTTP(S) URLs. Separate read-only checks on September 9, 2026 verified the deployed schema and a null link in an anonymous response. No real private joining link was fetched or opened.
 
