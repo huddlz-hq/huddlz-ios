@@ -49,11 +49,15 @@ jobs:
       - name: Run behavior tests
         run: |
           set -o pipefail
-          if [[ "${{ matrix.suite }}" == "discovery" ]]; then
-            test_selection=(-only-testing:HuddlzUITests/DiscoveryUITests)
-          else
-            test_selection=(-skip-testing:HuddlzUITests/DiscoveryUITests)
-          fi
+          discovery_classes=(DiscoveryUITests DiscoveryPagingUITests DiscoveryLocationUITests DiscoveryVenueUITests DiscoveryArtworkUITests)
+          test_selection=()
+          for test_class in "${discovery_classes[@]}"; do
+            if [[ "${{ matrix.suite }}" == "discovery" ]]; then
+              test_selection+=("-only-testing:HuddlzUITests/$test_class")
+            else
+              test_selection+=("-skip-testing:HuddlzUITests/$test_class")
+            fi
+          done
           xcodebuild test \
             -project Huddlz/Huddlz.xcodeproj \
             -scheme Huddlz \

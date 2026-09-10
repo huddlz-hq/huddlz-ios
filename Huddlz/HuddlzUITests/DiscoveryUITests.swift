@@ -2,10 +2,9 @@ import XCTest
 import CoreLocation
 import Synchronization
 
+// Separate classes let Xcode distribute independent journeys across simulators.
 @MainActor
-final class DiscoveryUITests: XCTestCase {
-    override func setUpWithError() throws { continueAfterFailure = false }
-
+final class DiscoveryUITests: DiscoveryUITestCase {
     func testOpeningAHuddlShowsItsHostingGroup() {
         let event = coffee.dropLast() + #", "relationships":{"group":{"data":{"type":"group","id":"neighbors"}}}}"#
         let detail = """
@@ -40,92 +39,127 @@ final class DiscoveryUITests: XCTestCase {
         }
     }
 
-    func testVenueMapAndAddressOpenAppleMaps() {
-        let maps = XCUIApplication(bundleIdentifier: "com.apple.Maps")
-        defer { maps.terminate() }
-        for eventType in ["in_person", "hybrid"] {
-            let address = "1 Apple Park Way, Cupertino, CA"
-            let event = coffee.replacingOccurrences(of: "Juniper Café", with: address)
-                .replacingOccurrences(of: "in_person", with: eventType)
-            let app = launch(routes: [
-                route(body: page([event])),
-                route(path: "/api/json/huddlz/coffee", body: "{\"data\":\(event)}")
-            ], places: [["query": address, "results": [
-                ["name": "Apple Park", "address": address, "latitude": 37.3349, "longitude": -122.0090]
-            ]]])
-            XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
-            app.buttons["huddl-coffee"].tap()
-            let map = app.maps.firstMatch
-            XCTAssertTrue(map.waitForExistence(timeout: 5))
-            let venue = app.buttons["Open location in Maps"]
-            if !venue.isHittable { app.swipeUp() }
-            XCTAssertTrue(venue.isHittable)
-            XCTAssertTrue(venue.label.contains(address))
-            let attachment = XCTAttachment(screenshot: app.screenshot())
-            attachment.lifetime = .keepAlways
-            add(attachment)
-            XCTAssertEqual(app.state, .runningForeground)
-            XCTAssertNotEqual(maps.state, .runningForeground)
-            venue.tap()
-            assertMapsOpened(maps)
-        }
+    func testSearchingAndOpeningACardShowsCurrentDetailsWithoutSignIn() throws {
+        let updated = coffee.replacingOccurrences(of: "Coffee with neighbors", with: "Coffee with neighbors — updated")
+            .replacingOccurrences(of: "2026-09-10T16:00:00Z", with: "2026-09-11T16:00:00Z")
+        let app = launch(routes: [
+            route(query: ["query": "coffee"], body: page([coffee.replacingOccurrences(of: "Coffee with neighbors", with: "Coffee search result")])),
+            route(body: page([coffee, hike])),
+            route(path: "/api/json/huddlz/coffee", body: "{\"data\":\(updated)}")
+        ])
+        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
+
+        XCTAssertTrue(app.buttons["huddl-hike"].exists)
+        let search = app.searchFields.firstMatch
+        search.tap()
+        search.typeText("coffee\n")
+        let matchingCard = app.buttons.matching(NSPredicate(format: "identifier == %@ AND label CONTAINS %@",
+                                                            "huddl-coffee", "Coffee search result")).firstMatch
+        XCTAssertTrue(matchingCard.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["huddl-hike"].exists)
+        app.buttons["huddl-coffee"].tap()
+
+        XCTAssertTrue(app.staticTexts["Coffee with neighbors — updated"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.searchFields.firstMatch.exists)
+        XCTAssertTrue(app.staticTexts["Bring a mug and meet your neighbors."].exists)
+        XCTAssertTrue(app.staticTexts["Juniper Café"].exists)
+        XCTAssertTrue(app.staticTexts["America/New_York"].exists)
+        let start = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Starts:")).firstMatch
+        let end = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Ends:")).firstMatch
+        XCTAssertTrue(start.label.contains("Sep 10, 2026"))
+        XCTAssertTrue(start.label.contains("9:00"))
+        XCTAssertTrue(end.label.contains("Sep 11, 2026"))
+        XCTAssertTrue(end.label.contains("12:00"))
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.searchFields.firstMatch.value as? String, "coffee")
     }
 
-    func testUnresolvedVenueStillOpensAnAddressSearchInMaps() {
-        let maps = XCUIApplication(bundleIdentifier: "com.apple.Maps")
-        defer { maps.terminate() }
-        let address = "Juniper Café"
-        let match: [String: Any] = ["name": address, "address": "1 Oak Street", "latitude": 37.3, "longitude": -122.0]
-        let lookups: [[[String: Any]]] = [[], [["query": address, "results": []]],
-                                        [["query": address, "results": [match, match]]]]
-        for places in lookups {
-            let app = launch(routes: [
-                route(body: page([coffee])),
-                route(path: "/api/json/huddlz/coffee", body: "{\"data\":\(coffee)}")
-            ], places: places)
-            XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
-            app.buttons["huddl-coffee"].tap()
-            let venue = app.buttons["Open location in Maps"]
-            XCTAssertTrue(venue.waitForExistence(timeout: 5))
-            XCTAssertTrue(venue.label.contains(address))
-            XCTAssertFalse(app.maps.firstMatch.exists)
-            XCTAssertEqual(app.state, .runningForeground)
-            XCTAssertNotEqual(maps.state, .runningForeground)
-            venue.tap()
-            assertMapsOpened(maps)
-        }
+    func testClearingAnEmptySearchRestoresDiscovery() {
+        let app = launch(routes: [
+            route(query: ["query": "no-match"], body: page([])),
+            route(body: page([coffee]))
+        ])
+        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
+        app.searchFields.firstMatch.tap()
+        app.searchFields.firstMatch.typeText("no-match\n")
+        XCTAssertTrue(app.staticTexts["No huddlz found"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Clear search and filters"].exists)
+
+        app.buttons["Clear text"].tap()
+        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["No huddlz found"].exists)
     }
 
-    private func assertMapsOpened(_ maps: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
-        // CI can report Maps' foreground state more than 12 seconds after the tap.
-        // This bounds the native handoff; it does not wait for live Maps results.
-        let opened = maps.wait(for: .runningForeground, timeout: 30)
-        if !opened {
-            let screen = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
-            screen.name = "Failed Maps handoff"
-            screen.lifetime = .keepAlways
-            add(screen)
-        }
-        XCTAssertTrue(opened, "Maps did not enter the foreground (state: \(maps.state.rawValue)).", file: file, line: line)
+    func testFiltersKeepSearchAndCanBeClearedTogether() {
+        let online = coffee.replacingOccurrences(of: "Coffee with neighbors", with: "Coffee online")
+            .replacingOccurrences(of: "in_person", with: "virtual")
+        let app = launch(routes: [
+            route(query: ["query": "coffee", "event_type": "virtual", "date_filter": "this_week"], body: page([])),
+            route(query: ["query": "coffee", "event_type": "virtual"], body: page([online])),
+            route(query: ["query": "coffee"], body: page([coffee])),
+            route(body: page([hike]))
+        ])
+        XCTAssertTrue(app.buttons["huddl-hike"].waitForExistence(timeout: 5))
+        app.searchFields.firstMatch.tap()
+        app.searchFields.firstMatch.typeText("coffee\n")
+        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
+        app.buttons["Event type: All types"].tap()
+        app.buttons["Online"].tap()
+        let coffeeCard = app.buttons.matching(NSPredicate(format: "identifier == %@ AND label CONTAINS %@",
+                                                          "huddl-coffee", "Coffee online")).firstMatch
+        XCTAssertTrue(coffeeCard.waitForExistence(timeout: 5))
+        app.buttons["When: All upcoming"].tap()
+        app.buttons["This week"].tap()
+        XCTAssertTrue(app.staticTexts["No huddlz found"].waitForExistence(timeout: 5))
+
+        app.buttons["Clear search and filters"].tap()
+        XCTAssertTrue(app.buttons["huddl-hike"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Event type: All types"].exists)
+        XCTAssertTrue(app.buttons["When: All upcoming"].exists)
     }
 
-    func testOnlineAndUnannouncedLocationsHaveNoMapAction() {
-        let events = [coffee.replacingOccurrences(of: "in_person", with: "virtual"),
-                      coffee.replacingOccurrences(of: "\"Juniper Café\"", with: "null"),
-                      coffee.replacingOccurrences(of: "Juniper Café", with: "   ")]
-        for event in events {
-            let app = launch(routes: [
-                route(body: page([event])),
-                route(path: "/api/json/huddlz/coffee", body: "{\"data\":\(event)}")
-            ])
-            XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
-            app.buttons["huddl-coffee"].tap()
-            XCTAssertTrue(app.staticTexts["About this huddl"].waitForExistence(timeout: 5))
-            XCTAssertFalse(app.buttons["Open location in Maps"].exists)
-            XCTAssertFalse(app.maps.firstMatch.exists)
-        }
+    func testRetryingAFailedSearchShowsCards() {
+        let response: [String: Any] = [
+            "path": "/api/json/huddlz", "query": [:],
+            "responses": [["status": 503, "body": "{}"], ["status": 200, "body": page([coffee])]]
+        ]
+        let app = launch(routes: [response])
+        XCTAssertTrue(app.staticTexts["Couldn’t load huddlz"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["huddl-coffee"].exists)
+
+        app.buttons["Try again"].tap()
+        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Couldn’t load huddlz"].exists)
     }
 
+    func testRemovedHuddlShowsAnUnavailableMessageInsteadOfStaleDetails() {
+        let app = launch(routes: [
+            route(body: page([coffee])),
+            route(path: "/api/json/huddlz/coffee", body: "{}", status: 404)
+        ])
+        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
+        app.buttons["huddl-coffee"].tap()
+        XCTAssertTrue(app.staticTexts["This huddl is no longer available."].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Bring a mug and meet your neighbors."].exists)
+        XCTAssertTrue(app.buttons["Try again"].exists)
+    }
+
+    func testInaccessibleHuddlShowsAnErrorInsteadOfEventContent() {
+        let app = launch(routes: [
+            route(body: page([coffee])),
+            route(path: "/api/json/huddlz/coffee", body: "{}", status: 403)
+        ])
+        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
+        app.buttons["huddl-coffee"].tap()
+        XCTAssertTrue(app.staticTexts["Couldn’t load this huddl"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Bring a mug and meet your neighbors."].exists)
+        XCTAssertTrue(app.buttons["Try again"].exists)
+    }
+}
+
+@MainActor
+final class DiscoveryPagingUITests: DiscoveryUITestCase {
     func testScrollingLoadsTheNextBatchWithoutMovingExistingCards() {
         let book = coffee.replacingOccurrences(of: "coffee", with: "book")
             .replacingOccurrences(of: "Coffee with neighbors", with: "Neighborhood book club")
@@ -288,7 +322,10 @@ final class DiscoveryUITests: XCTestCase {
         XCTAssertFalse(app.buttons["huddl-coffee"].exists)
         XCTAssertFalse(app.staticTexts["Couldn’t refresh huddlz."].exists)
     }
+}
 
+@MainActor
+final class DiscoveryLocationUITests: DiscoveryUITestCase {
     func testCurrentLocationFindsNearbyHuddlzOnlyWhenRequestedAndKeepsFilters() {
         XCUIDevice.shared.location = XCUILocation(location: CLLocation(latitude: 29.9012, longitude: -81.3124))
         defer { XCUIDevice.shared.location = nil }
@@ -369,94 +406,6 @@ final class DiscoveryUITests: XCTestCase {
         XCUIDevice.shared.location = XCUILocation(location: CLLocation(latitude: 29.9012, longitude: -81.3124))
         app.buttons["Use current location"].tap()
         XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 15))
-    }
-
-    func testEventImageAppearsInItsCardAndDetails() {
-        let illustrated = coffee.replacingOccurrences(of: "\"thumbnail_url\":null",
-                                                     with: "\"thumbnail_url\":null,\"image_url\":\"https://images.example.test/coffee.png\"")
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 160, height: 90))
-        let png = renderer.pngData { context in
-            UIColor.green.setFill()
-            context.fill(CGRect(x: 0, y: 0, width: 160, height: 90))
-        }
-        let app = launch(routes: [
-            route(body: page([illustrated])),
-            route(path: "/api/json/huddlz/coffee", body: "{\"data\":\(illustrated)}"),
-            ["path": "/coffee.png", "query": [:],
-             "responses": [["status": 200, "bodyBase64": png.base64EncodedString()]]]
-        ])
-        let card = app.buttons["huddl-coffee"]
-        XCTAssertTrue(card.waitForExistence(timeout: 5))
-        let cardImage = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            Self.artworkPixelFraction(card, region: CGRect(x: 16, y: 16,
-                width: card.frame.width - 32, height: (card.frame.width - 32) * 9 / 16)) > 0.9
-        }, object: nil)
-        XCTAssertEqual(XCTWaiter.wait(for: [cardImage], timeout: 8), .completed)
-        card.tap()
-        XCTAssertTrue(app.staticTexts["About this huddl"].waitForExistence(timeout: 5))
-        let detailImage = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            Self.artworkPixelFraction(app, region: CGRect(x: 20, y: app.navigationBars.firstMatch.frame.maxY + 20,
-                width: app.frame.width - 40, height: (app.frame.width - 40) * 9 / 16)) > 0.9
-        }, object: nil)
-        XCTAssertEqual(XCTWaiter.wait(for: [detailImage], timeout: 8), .completed)
-    }
-
-    func testMissingAndFailedImagesKeepTheFallbackAndEventDetails() {
-        for imageResponse in [503, 200, 0] {
-            let event = imageResponse == 0 ? coffee : coffee.replacingOccurrences(
-                of: "\"thumbnail_url\":null", with: "\"image_url\":\"https://images.example.test/unavailable.png\"")
-            let app = launch(routes: [
-                route(body: page([event])),
-                route(path: "/api/json/huddlz/coffee", body: "{\"data\":\(event)}"),
-                route(path: "/unavailable.png", body: "not image data", status: imageResponse)
-            ])
-            let card = app.buttons["huddl-coffee"]
-            XCTAssertTrue(card.waitForExistence(timeout: 5))
-            let attachment = XCTAttachment(screenshot: card.screenshot())
-            attachment.name = "Fallback for image response \(imageResponse)"
-            attachment.lifetime = .keepAlways
-            add(attachment)
-            XCTAssertGreaterThan(Self.artworkPixelFraction(card, fallback: true, region: CGRect(x: 16, y: 16, width: card.frame.width - 32, height: (card.frame.width - 32) * 9 / 16)), 0.01,
-                                 "Expected the event-type illustration for image response \(imageResponse)")
-            card.tap()
-            XCTAssertTrue(app.staticTexts["Bring a mug and meet your neighbors."].waitForExistence(timeout: 5))
-            let artwork = CGRect(x: 20, y: app.navigationBars.firstMatch.frame.maxY + 20,
-                                 width: app.frame.width - 40, height: (app.frame.width - 40) * 9 / 16)
-            XCTAssertGreaterThan(Self.artworkPixelFraction(app, fallback: true, region: artwork), 0.01,
-                                 "Expected fallback artwork in details for image response \(imageResponse)")
-            app.navigationBars.buttons.firstMatch.tap()
-            XCTAssertTrue(card.waitForExistence(timeout: 5))
-            XCTAssertGreaterThan(Self.artworkPixelFraction(card, fallback: true,
-                                 region: CGRect(x: 16, y: 16, width: card.frame.width - 32, height: (card.frame.width - 32) * 9 / 16)), 0.01)
-            app.terminate()
-        }
-    }
-
-    private static func artworkPixelFraction(_ element: XCUIElement, fallback: Bool = false, region: CGRect? = nil) -> Double {
-        guard var source = element.screenshot().image.cgImage else { return 0 }
-        if let region {
-            // Crop the artwork so text and navigation cannot satisfy the visual assertion.
-            let scale = CGFloat(source.width) / element.frame.width
-            guard let cropped = source.cropping(to: region.applying(CGAffineTransform(scaleX: scale, y: scale))) else { return 0 }
-            source = cropped
-        }
-        let width = source.width, height = source.height
-        var pixels = [UInt8](repeating: 0, count: width * height * 4)
-        let count = pixels.withUnsafeMutableBytes { bytes -> Int in
-            let context = CGContext(data: bytes.baseAddress, width: width, height: height,
-                                    bitsPerComponent: 8, bytesPerRow: width * 4,
-                                    space: CGColorSpaceCreateDeviceRGB(),
-                                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-            context.draw(source, in: CGRect(x: 0, y: 0, width: width, height: height))
-            let data = bytes.bindMemory(to: UInt8.self)
-            return stride(from: 0, to: data.count, by: 4).filter {
-                if fallback {
-                    return data[$0] > 100 && data[$0 + 2] > 80 && Double(data[$0 + 1]) < Double(data[$0]) * 0.8
-                }
-                return data[$0] < 50 && data[$0 + 1] > 200 && data[$0 + 2] < 50
-            }.count
-        }
-        return Double(count) / Double(width * height)
     }
 
     func testChoosingAPlaceShowsNearbyResultsAndKeepsFilters() {
@@ -544,126 +493,196 @@ final class DiscoveryUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Location: Anywhere"].exists)
         XCTAssertFalse(app.buttons["Distance: 25 miles"].exists)
     }
+}
 
-    func testSearchingAndOpeningACardShowsCurrentDetailsWithoutSignIn() throws {
-        let updated = coffee.replacingOccurrences(of: "Coffee with neighbors", with: "Coffee with neighbors — updated")
-            .replacingOccurrences(of: "2026-09-10T16:00:00Z", with: "2026-09-11T16:00:00Z")
+@MainActor
+final class DiscoveryVenueUITests: DiscoveryUITestCase {
+    func testVenueMapAndAddressOpenAppleMaps() {
+        let maps = XCUIApplication(bundleIdentifier: "com.apple.Maps")
+        defer { maps.terminate() }
+        for eventType in ["in_person", "hybrid"] {
+            let address = "1 Apple Park Way, Cupertino, CA"
+            let event = coffee.replacingOccurrences(of: "Juniper Café", with: address)
+                .replacingOccurrences(of: "in_person", with: eventType)
+            let app = launch(routes: [
+                route(body: page([event])),
+                route(path: "/api/json/huddlz/coffee", body: "{\"data\":\(event)}")
+            ], places: [["query": address, "results": [
+                ["name": "Apple Park", "address": address, "latitude": 37.3349, "longitude": -122.0090]
+            ]]])
+            XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
+            app.buttons["huddl-coffee"].tap()
+            let map = app.maps.firstMatch
+            XCTAssertTrue(map.waitForExistence(timeout: 5))
+            let venue = app.buttons["Open location in Maps"]
+            if !venue.isHittable { app.swipeUp() }
+            XCTAssertTrue(venue.isHittable)
+            XCTAssertTrue(venue.label.contains(address))
+            let attachment = XCTAttachment(screenshot: app.screenshot())
+            attachment.lifetime = .keepAlways
+            add(attachment)
+            XCTAssertEqual(app.state, .runningForeground)
+            XCTAssertNotEqual(maps.state, .runningForeground)
+            venue.tap()
+            assertMapsOpened(maps)
+        }
+    }
+
+    func testUnresolvedVenueStillOpensAnAddressSearchInMaps() {
+        let maps = XCUIApplication(bundleIdentifier: "com.apple.Maps")
+        defer { maps.terminate() }
+        let address = "Juniper Café"
+        let match: [String: Any] = ["name": address, "address": "1 Oak Street", "latitude": 37.3, "longitude": -122.0]
+        let lookups: [[[String: Any]]] = [[], [["query": address, "results": []]],
+                                        [["query": address, "results": [match, match]]]]
+        for places in lookups {
+            let app = launch(routes: [
+                route(body: page([coffee])),
+                route(path: "/api/json/huddlz/coffee", body: "{\"data\":\(coffee)}")
+            ], places: places)
+            XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
+            app.buttons["huddl-coffee"].tap()
+            let venue = app.buttons["Open location in Maps"]
+            XCTAssertTrue(venue.waitForExistence(timeout: 5))
+            XCTAssertTrue(venue.label.contains(address))
+            XCTAssertFalse(app.maps.firstMatch.exists)
+            XCTAssertEqual(app.state, .runningForeground)
+            XCTAssertNotEqual(maps.state, .runningForeground)
+            venue.tap()
+            assertMapsOpened(maps)
+        }
+    }
+
+    func testOnlineAndUnannouncedLocationsHaveNoMapAction() {
+        let events = [coffee.replacingOccurrences(of: "in_person", with: "virtual"),
+                      coffee.replacingOccurrences(of: "\"Juniper Café\"", with: "null"),
+                      coffee.replacingOccurrences(of: "Juniper Café", with: "   ")]
+        for event in events {
+            let app = launch(routes: [
+                route(body: page([event])),
+                route(path: "/api/json/huddlz/coffee", body: "{\"data\":\(event)}")
+            ])
+            XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
+            app.buttons["huddl-coffee"].tap()
+            XCTAssertTrue(app.staticTexts["About this huddl"].waitForExistence(timeout: 5))
+            XCTAssertFalse(app.buttons["Open location in Maps"].exists)
+            XCTAssertFalse(app.maps.firstMatch.exists)
+        }
+    }
+}
+
+@MainActor
+final class DiscoveryArtworkUITests: DiscoveryUITestCase {
+    func testEventImageAppearsInItsCardAndDetails() {
+        let illustrated = coffee.replacingOccurrences(of: "\"thumbnail_url\":null",
+                                                     with: "\"thumbnail_url\":null,\"image_url\":\"https://images.example.test/coffee.png\"")
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 160, height: 90))
+        let png = renderer.pngData { context in
+            UIColor.green.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 160, height: 90))
+        }
         let app = launch(routes: [
-            route(query: ["query": "coffee"], body: page([coffee.replacingOccurrences(of: "Coffee with neighbors", with: "Coffee search result")])),
-            route(body: page([coffee, hike])),
-            route(path: "/api/json/huddlz/coffee", body: "{\"data\":\(updated)}")
+            route(body: page([illustrated])),
+            route(path: "/api/json/huddlz/coffee", body: "{\"data\":\(illustrated)}"),
+            ["path": "/coffee.png", "query": [:],
+             "responses": [["status": 200, "bodyBase64": png.base64EncodedString()]]]
         ])
-        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
-
-        XCTAssertTrue(app.buttons["huddl-hike"].exists)
-        let search = app.searchFields.firstMatch
-        search.tap()
-        search.typeText("coffee\n")
-        let matchingCard = app.buttons.matching(NSPredicate(format: "identifier == %@ AND label CONTAINS %@",
-                                                            "huddl-coffee", "Coffee search result")).firstMatch
-        XCTAssertTrue(matchingCard.waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["huddl-hike"].exists)
-        app.buttons["huddl-coffee"].tap()
-
-        XCTAssertTrue(app.staticTexts["Coffee with neighbors — updated"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.searchFields.firstMatch.exists)
-        XCTAssertTrue(app.staticTexts["Bring a mug and meet your neighbors."].exists)
-        XCTAssertTrue(app.staticTexts["Juniper Café"].exists)
-        XCTAssertTrue(app.staticTexts["America/New_York"].exists)
-        let start = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Starts:")).firstMatch
-        let end = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Ends:")).firstMatch
-        XCTAssertTrue(start.label.contains("Sep 10, 2026"))
-        XCTAssertTrue(start.label.contains("9:00"))
-        XCTAssertTrue(end.label.contains("Sep 11, 2026"))
-        XCTAssertTrue(end.label.contains("12:00"))
-        app.navigationBars.buttons.firstMatch.tap()
-        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 5))
-        XCTAssertEqual(app.searchFields.firstMatch.value as? String, "coffee")
+        let card = app.buttons["huddl-coffee"]
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        let cardImage = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            Self.artworkPixelFraction(card, region: CGRect(x: 16, y: 16,
+                width: card.frame.width - 32, height: (card.frame.width - 32) * 9 / 16)) > 0.9
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [cardImage], timeout: 8), .completed)
+        card.tap()
+        XCTAssertTrue(app.staticTexts["About this huddl"].waitForExistence(timeout: 5))
+        let detailImage = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            Self.artworkPixelFraction(app, region: CGRect(x: 20, y: app.navigationBars.firstMatch.frame.maxY + 20,
+                width: app.frame.width - 40, height: (app.frame.width - 40) * 9 / 16)) > 0.9
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [detailImage], timeout: 8), .completed)
     }
 
-    func testClearingAnEmptySearchRestoresDiscovery() {
-        let app = launch(routes: [
-            route(query: ["query": "no-match"], body: page([])),
-            route(body: page([coffee]))
-        ])
-        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
-        app.searchFields.firstMatch.tap()
-        app.searchFields.firstMatch.typeText("no-match\n")
-        XCTAssertTrue(app.staticTexts["No huddlz found"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["Clear search and filters"].exists)
+    func testMissingAndFailedImagesKeepTheFallbackAndEventDetails() {
+        for imageResponse in [503, 200, 0] {
+            let event = imageResponse == 0 ? coffee : coffee.replacingOccurrences(
+                of: "\"thumbnail_url\":null", with: "\"image_url\":\"https://images.example.test/unavailable.png\"")
+            let app = launch(routes: [
+                route(body: page([event])),
+                route(path: "/api/json/huddlz/coffee", body: "{\"data\":\(event)}"),
+                route(path: "/unavailable.png", body: "not image data", status: imageResponse)
+            ])
+            let card = app.buttons["huddl-coffee"]
+            XCTAssertTrue(card.waitForExistence(timeout: 5))
+            let attachment = XCTAttachment(screenshot: card.screenshot())
+            attachment.name = "Fallback for image response \(imageResponse)"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+            XCTAssertGreaterThan(Self.artworkPixelFraction(card, fallback: true, region: CGRect(x: 16, y: 16, width: card.frame.width - 32, height: (card.frame.width - 32) * 9 / 16)), 0.01,
+                                 "Expected the event-type illustration for image response \(imageResponse)")
+            card.tap()
+            XCTAssertTrue(app.staticTexts["Bring a mug and meet your neighbors."].waitForExistence(timeout: 5))
+            let artwork = CGRect(x: 20, y: app.navigationBars.firstMatch.frame.maxY + 20,
+                                 width: app.frame.width - 40, height: (app.frame.width - 40) * 9 / 16)
+            XCTAssertGreaterThan(Self.artworkPixelFraction(app, fallback: true, region: artwork), 0.01,
+                                 "Expected fallback artwork in details for image response \(imageResponse)")
+            app.navigationBars.buttons.firstMatch.tap()
+            XCTAssertTrue(card.waitForExistence(timeout: 5))
+            XCTAssertGreaterThan(Self.artworkPixelFraction(card, fallback: true,
+                                 region: CGRect(x: 16, y: 16, width: card.frame.width - 32, height: (card.frame.width - 32) * 9 / 16)), 0.01)
+            app.terminate()
+        }
+    }
+}
 
-        app.buttons["Clear text"].tap()
-        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.staticTexts["No huddlz found"].exists)
+@MainActor
+class DiscoveryUITestCase: XCTestCase {
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
     }
 
-    func testFiltersKeepSearchAndCanBeClearedTogether() {
-        let online = coffee.replacingOccurrences(of: "Coffee with neighbors", with: "Coffee online")
-            .replacingOccurrences(of: "in_person", with: "virtual")
-        let app = launch(routes: [
-            route(query: ["query": "coffee", "event_type": "virtual", "date_filter": "this_week"], body: page([])),
-            route(query: ["query": "coffee", "event_type": "virtual"], body: page([online])),
-            route(query: ["query": "coffee"], body: page([coffee])),
-            route(body: page([hike]))
-        ])
-        XCTAssertTrue(app.buttons["huddl-hike"].waitForExistence(timeout: 5))
-        app.searchFields.firstMatch.tap()
-        app.searchFields.firstMatch.typeText("coffee\n")
-        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
-        app.buttons["Event type: All types"].tap()
-        app.buttons["Online"].tap()
-        let coffeeCard = app.buttons.matching(NSPredicate(format: "identifier == %@ AND label CONTAINS %@",
-                                                          "huddl-coffee", "Coffee online")).firstMatch
-        XCTAssertTrue(coffeeCard.waitForExistence(timeout: 5))
-        app.buttons["When: All upcoming"].tap()
-        app.buttons["This week"].tap()
-        XCTAssertTrue(app.staticTexts["No huddlz found"].waitForExistence(timeout: 5))
-
-        app.buttons["Clear search and filters"].tap()
-        XCTAssertTrue(app.buttons["huddl-hike"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["Event type: All types"].exists)
-        XCTAssertTrue(app.buttons["When: All upcoming"].exists)
+    fileprivate func assertMapsOpened(_ maps: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
+        // CI can report Maps' foreground state more than 12 seconds after the tap.
+        // This bounds the native handoff; it does not wait for live Maps results.
+        let opened = maps.wait(for: .runningForeground, timeout: 30)
+        if !opened {
+            let screen = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+            screen.name = "Failed Maps handoff"
+            screen.lifetime = .keepAlways
+            add(screen)
+        }
+        XCTAssertTrue(opened, "Maps did not enter the foreground (state: \(maps.state.rawValue)).", file: file, line: line)
     }
 
-    func testRetryingAFailedSearchShowsCards() {
-        let response: [String: Any] = [
-            "path": "/api/json/huddlz", "query": [:],
-            "responses": [["status": 503, "body": "{}"], ["status": 200, "body": page([coffee])]]
-        ]
-        let app = launch(routes: [response])
-        XCTAssertTrue(app.staticTexts["Couldn’t load huddlz"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["huddl-coffee"].exists)
-
-        app.buttons["Try again"].tap()
-        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.staticTexts["Couldn’t load huddlz"].exists)
+    fileprivate static func artworkPixelFraction(_ element: XCUIElement, fallback: Bool = false, region: CGRect? = nil) -> Double {
+        guard var source = element.screenshot().image.cgImage else { return 0 }
+        if let region {
+            // Crop the artwork so text and navigation cannot satisfy the visual assertion.
+            let scale = CGFloat(source.width) / element.frame.width
+            guard let cropped = source.cropping(to: region.applying(CGAffineTransform(scaleX: scale, y: scale))) else { return 0 }
+            source = cropped
+        }
+        let width = source.width, height = source.height
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        let count = pixels.withUnsafeMutableBytes { bytes -> Int in
+            let context = CGContext(data: bytes.baseAddress, width: width, height: height,
+                                    bitsPerComponent: 8, bytesPerRow: width * 4,
+                                    space: CGColorSpaceCreateDeviceRGB(),
+                                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+            context.draw(source, in: CGRect(x: 0, y: 0, width: width, height: height))
+            let data = bytes.bindMemory(to: UInt8.self)
+            return stride(from: 0, to: data.count, by: 4).filter {
+                if fallback {
+                    return data[$0] > 100 && data[$0 + 2] > 80 && Double(data[$0 + 1]) < Double(data[$0]) * 0.8
+                }
+                return data[$0] < 50 && data[$0 + 1] > 200 && data[$0 + 2] < 50
+            }.count
+        }
+        return Double(count) / Double(width * height)
     }
 
-    func testRemovedHuddlShowsAnUnavailableMessageInsteadOfStaleDetails() {
-        let app = launch(routes: [
-            route(body: page([coffee])),
-            route(path: "/api/json/huddlz/coffee", body: "{}", status: 404)
-        ])
-        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
-        app.buttons["huddl-coffee"].tap()
-        XCTAssertTrue(app.staticTexts["This huddl is no longer available."].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.staticTexts["Bring a mug and meet your neighbors."].exists)
-        XCTAssertTrue(app.buttons["Try again"].exists)
-    }
-
-    func testInaccessibleHuddlShowsAnErrorInsteadOfEventContent() {
-        let app = launch(routes: [
-            route(body: page([coffee])),
-            route(path: "/api/json/huddlz/coffee", body: "{}", status: 403)
-        ])
-        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
-        app.buttons["huddl-coffee"].tap()
-        XCTAssertTrue(app.staticTexts["Couldn’t load this huddl"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.staticTexts["Bring a mug and meet your neighbors."].exists)
-        XCTAssertTrue(app.buttons["Try again"].exists)
-    }
-
-    private func launch(routes: [[String: Any]], places: [[String: Any]] = [], resetLocationPermission: Bool = false, failFirstLocation: Bool = false) -> XCUIApplication {
+    fileprivate func launch(routes: [[String: Any]], places: [[String: Any]] = [], resetLocationPermission: Bool = false, failFirstLocation: Bool = false) -> XCUIApplication {
         XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
         if resetLocationPermission { app.resetAuthorizationStatus(for: .location) }
@@ -676,16 +695,16 @@ final class DiscoveryUITests: XCTestCase {
         return app
     }
 
-    private func route(path: String = "/api/json/huddlz", query: [String: String] = [:], body: String, status: Int = 200) -> [String: Any] {
+    fileprivate func route(path: String = "/api/json/huddlz", query: [String: String] = [:], body: String, status: Int = 200) -> [String: Any] {
         ["path": path, "query": query, "responses": [["status": status, "body": body]]]
     }
 
-    private func page(_ events: [String], next: String? = nil) -> String {
+    fileprivate func page(_ events: [String], next: String? = nil) -> String {
         let link = next.map { "\"\($0)\"" } ?? "null"
         return "{\"data\":[\(events.joined(separator: ","))],\"links\":{\"next\":\(link)}}"
     }
 
-    private var coffee: String {
+    fileprivate var coffee: String {
         """
         {"type":"huddl","id":"coffee","attributes":{
           "title":"Coffee with neighbors","description":"Bring a mug and meet your neighbors.",
@@ -696,5 +715,5 @@ final class DiscoveryUITests: XCTestCase {
         """
     }
 
-    private var hike: String { coffee.replacingOccurrences(of: "coffee", with: "hike").replacingOccurrences(of: "Coffee with neighbors", with: "Riverside hike") }
+    fileprivate var hike: String { coffee.replacingOccurrences(of: "coffee", with: "hike").replacingOccurrences(of: "Coffee with neighbors", with: "Riverside hike") }
 }

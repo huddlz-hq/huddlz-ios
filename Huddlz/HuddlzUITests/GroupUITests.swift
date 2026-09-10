@@ -2,7 +2,10 @@ import XCTest
 
 @MainActor
 final class GroupUITests: XCTestCase {
-    override func setUpWithError() throws { continueAfterFailure = false }
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
+    }
 
     func testOpeningTheHostShowsItsGroupAndReturningPreservesTheHuddl() {
         let app = launch(groupResponses: [["status": 200, "body": group]], huddlz: page([walk]))

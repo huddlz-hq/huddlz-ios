@@ -2,7 +2,10 @@ import XCTest
 
 @MainActor
 final class ProfileDefaultsUITests: XCTestCase {
-    override func setUpWithError() throws { continueAfterFailure = false }
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
+    }
 
     func testSigningInAndReopeningUseTheCurrentProfileCity() {
         let app = launch(city: "Austin, TX", latitude: 30.2672, longitude: -97.7431, timeZone: "America/Chicago")

@@ -2,9 +2,7 @@ import XCTest
 import CoreLocation
 
 @MainActor
-final class RegistrationUITests: XCTestCase {
-    override func setUpWithError() throws { continueAfterFailure = false }
-
+final class RegistrationUITests: RegistrationUITestCase {
     func testCreatingAnAccountRequiresAcceptanceAndReturnsToBrowsingWithASavedSession() {
         let app = launch()
         app.buttons["When: All upcoming"].tap()
@@ -62,7 +60,10 @@ final class RegistrationUITests: XCTestCase {
         app.buttons["Sign out"].tap()
         XCTAssertTrue(app.textFields["Email"].waitForExistence(timeout: 5))
     }
+}
 
+@MainActor
+final class SignupCityUITests: RegistrationUITestCase {
     func testChoosingACityRequiresConfirmationThenFindsNearbyHuddlz() {
         let app = launch()
         app.buttons["When: All upcoming"].tap()
@@ -87,6 +88,17 @@ final class RegistrationUITests: XCTestCase {
         XCTAssertTrue(app.buttons["When: This week"].exists)
     }
 
+    func testFailedCitySaveKeepsTheCityAndCanRetry() {
+        verifyFailedCitySave(retry: true)
+    }
+
+    func testFailedCitySaveCanBeSkippedWithoutChangingSearch() {
+        verifyFailedCitySave(retry: false)
+    }
+}
+
+@MainActor
+final class SignupLocationUITests: RegistrationUITestCase {
     func testCurrentLocationSuggestsACityForConfirmation() {
         XCUIDevice.shared.location = XCUILocation(location: CLLocation(latitude: 29.9012, longitude: -81.3124))
         defer { XCUIDevice.shared.location = nil }
@@ -108,15 +120,23 @@ final class RegistrationUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Location: Anywhere"].waitForExistence(timeout: 5))
     }
 
-    func testFailedCitySaveKeepsTheCityAndCanRetry() {
-        verifyFailedCitySave(retry: true)
+    func testDeniedLocationKeepsCitySearchAndSkippingAvailable() {
+        verifyLocationRecovery(denied: true)
     }
 
-    func testFailedCitySaveCanBeSkippedWithoutChangingSearch() {
-        verifyFailedCitySave(retry: false)
+    func testUnavailableLocationKeepsCitySearchAndSkippingAvailable() {
+        verifyLocationRecovery(denied: false)
+    }
+}
+
+@MainActor
+class RegistrationUITestCase: XCTestCase {
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
     }
 
-    private func verifyFailedCitySave(retry: Bool) {
+    fileprivate func verifyFailedCitySave(retry: Bool) {
         let app = launch(saveResponses: [
             ["status": 200, "body": #"{"data":{"updateHomeLocation":{"result":null,"errors":[{"__typename":"MutationError"}]}}}"#],
             ["status": 200, "body": savedCity]
@@ -146,15 +166,7 @@ final class RegistrationUITests: XCTestCase {
         }
     }
 
-    func testDeniedLocationKeepsCitySearchAndSkippingAvailable() {
-        verifyLocationRecovery(denied: true)
-    }
-
-    func testUnavailableLocationKeepsCitySearchAndSkippingAvailable() {
-        verifyLocationRecovery(denied: false)
-    }
-
-    private func verifyLocationRecovery(denied: Bool) {
+    fileprivate func verifyLocationRecovery(denied: Bool) {
         let app = launch(resetLocation: true, failFirstLocation: !denied)
         openRegistration(app)
         fillRegistration(app)
@@ -184,18 +196,18 @@ final class RegistrationUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Location: Anywhere"].waitForExistence(timeout: 5))
     }
 
-    private func capture(_ app: XCUIApplication, name: String) {
+    fileprivate func capture(_ app: XCUIApplication, name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
     }
 
-    private let savedCity = #"{"data":{"updateHomeLocation":{"result":{"id":"neighbor","homeLocation":"St. Augustine, FL, USA"},"errors":[]}}}"#
+    fileprivate let savedCity = #"{"data":{"updateHomeLocation":{"result":{"id":"neighbor","homeLocation":"St. Augustine, FL, USA"},"errors":[]}}}"#
 
-    private let user = #"{"id":"neighbor","email":"neighbor@example.com","display_name":"Our Neighbor"}"#
+    fileprivate let user = #"{"id":"neighbor","email":"neighbor@example.com","display_name":"Our Neighbor"}"#
 
-    private func launch(responses: [[String: Any]]? = nil, resetLocation: Bool = false, saveResponses: [[String: Any]]? = nil, failFirstLocation: Bool = false) -> XCUIApplication {
+    fileprivate func launch(responses: [[String: Any]]? = nil, resetLocation: Bool = false, saveResponses: [[String: Any]]? = nil, failFirstLocation: Bool = false) -> XCUIApplication {
         XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
@@ -217,14 +229,14 @@ final class RegistrationUITests: XCTestCase {
         return app
     }
 
-    private func openRegistration(_ app: XCUIApplication) {
+    fileprivate func openRegistration(_ app: XCUIApplication) {
         app.buttons["Account"].tap()
         XCTAssertTrue(app.buttons["Create an account"].waitForExistence(timeout: 3))
         app.buttons["Create an account"].tap()
         XCTAssertTrue(app.textFields["Display name"].waitForExistence(timeout: 3))
     }
 
-    private func fillRegistration(_ app: XCUIApplication, email: String = "neighbor@example.com") {
+    fileprivate func fillRegistration(_ app: XCUIApplication, email: String = "neighbor@example.com") {
         app.textFields["Display name"].tap()
         app.textFields["Display name"].typeText("Our Neighbor")
         app.textFields["Email"].tap()

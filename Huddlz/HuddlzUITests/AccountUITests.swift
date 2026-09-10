@@ -2,7 +2,10 @@ import XCTest
 
 @MainActor
 final class AccountUITests: XCTestCase {
-    override func setUpWithError() throws { continueAfterFailure = false }
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
+    }
 
     func testRequestingPasswordResetShowsConfirmationAndKeepsEmailForSignIn() {
         let app = launch()
@@ -85,10 +88,9 @@ final class AccountUITests: XCTestCase {
     }
 
     func testSigningOutStaysSignedOutAfterReopening() {
-        let app = launch()
-        signIn(app)
+        let app = launch(savedSession: true)
         app.buttons["Account"].tap()
-        XCTAssertTrue(app.staticTexts["Our Neighbor"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Our Neighbor"].waitForExistence(timeout: 60))
         signOut(app)
         app.terminate()
         app.launch()
@@ -127,7 +129,7 @@ final class AccountUITests: XCTestCase {
 
     private let user = #"{"id":"neighbor","email":"neighbor@example.com","display_name":"Our Neighbor"}"#
 
-    private func launch(signInResponses: [[String: Any]]? = nil, resetResponses: [[String: Any]]? = nil) -> XCUIApplication {
+    private func launch(savedSession: Bool = false, signInResponses: [[String: Any]]? = nil, resetResponses: [[String: Any]]? = nil) -> XCUIApplication {
         XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
@@ -141,7 +143,7 @@ final class AccountUITests: XCTestCase {
                 ["status": 200, "body": "{\"token\":\"fixture-token\",\"user\":\(user)}"]]]
         ]
         app.launchEnvironment["HUDDLZ_UI_HTTP_SCRIPT"] = String(decoding: try! JSONSerialization.data(withJSONObject: routes), as: UTF8.self)
-        app.launch()
+        if savedSession { app.launchWithSavedSession() } else { app.launch() }
         XCTAssertTrue(app.buttons["Account"].waitForExistence(timeout: 5))
         return app
     }

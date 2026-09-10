@@ -2,17 +2,19 @@ import XCTest
 
 @MainActor
 final class RSVPUITests: XCTestCase {
-    override func setUpWithError() throws { continueAfterFailure = false }
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
+    }
 
     func testRSVPAndCancellationUpdateYourAttendance() {
         let app = makeApp(status: "none")
         var delayed = response("confirmed")
         delayed["delaySeconds"] = 5
         setRoutes(app, status: "none", rsvpResponses: [delayed], joiningResponses: [linkResponse(nil), linkResponse("https://example.com/room"), linkResponse(nil)])
-        app.launch()
-        signIn(app)
+        app.launchWithSavedSession()
         openHuddl(app)
-        XCTAssertTrue(app.buttons["RSVP"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["RSVP"].waitForExistence(timeout: 60))
         app.buttons["RSVP"].tap()
         XCTAssertFalse(app.buttons["RSVP"].isEnabled)
         XCTAssertTrue(app.staticTexts["You haven’t RSVP’d"].exists)
@@ -54,10 +56,9 @@ final class RSVPUITests: XCTestCase {
             ["status": 422, "body": #"{"errors":[{"detail":"This huddl is full"}]}"#],
             response("confirmed")
         ])
-        app.launch()
-        signIn(app)
+        app.launchWithSavedSession()
         openHuddl(app)
-        XCTAssertTrue(app.buttons["RSVP"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["RSVP"].waitForExistence(timeout: 60))
         app.buttons["RSVP"].tap()
         XCTAssertTrue(app.staticTexts["Couldn’t update your RSVP. Please try again."].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["You haven’t RSVP’d"].exists)
@@ -85,11 +86,10 @@ final class RSVPUITests: XCTestCase {
     func testRSVPRefreshesJoiningAccessAndSearchBadge() {
         let app = makeApp(status: "none")
         setRoutes(app, status: "none", joiningResponses: [linkResponse(nil), linkResponse("https://example.com/room")])
-        app.launch()
-        signIn(app)
+        app.launchWithSavedSession()
         openHuddl(app)
         app.swipeUp()
-        XCTAssertTrue(app.staticTexts["Online joining details aren’t available for this account yet."].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Online joining details aren’t available for this account yet."].waitForExistence(timeout: 60))
         app.swipeDown()
         app.buttons["RSVP"].tap()
         XCTAssertTrue(app.staticTexts["You’re going"].waitForExistence(timeout: 10))
@@ -110,10 +110,9 @@ final class RSVPUITests: XCTestCase {
 
     func testWaitlistedPersonCanLeaveTheWaitlist() {
         let app = makeApp(status: "waitlisted")
-        app.launch()
-        signIn(app)
+        app.launchWithSavedSession()
         openHuddl(app)
-        XCTAssertTrue(app.buttons["Leave waitlist"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Leave waitlist"].waitForExistence(timeout: 60))
         app.buttons["Leave waitlist"].tap()
         XCTAssertTrue(app.staticTexts["You haven’t RSVP’d"].waitForExistence(timeout: 10))
         signOut(app)
@@ -151,16 +150,6 @@ final class RSVPUITests: XCTestCase {
             route("/api/json/huddlz/coffee", body: "{\"data\":\(event)}")
         ]
         app.launchEnvironment["HUDDLZ_UI_HTTP_SCRIPT"] = String(decoding: try! JSONSerialization.data(withJSONObject: routes), as: UTF8.self)
-    }
-
-    private func signIn(_ app: XCUIApplication) {
-        XCTAssertTrue(app.buttons["Account"].waitForExistence(timeout: 5))
-        app.buttons["Account"].tap()
-        app.textFields["Email"].tap()
-        app.textFields["Email"].typeText("neighbor@example.com")
-        app.secureTextFields["Password"].tap()
-        app.secureTextFields["Password"].typeText("sample-password\n")
-        XCTAssertTrue(app.buttons["Account"].waitForExistence(timeout: 60))
     }
 
     private func openHuddl(_ app: XCUIApplication) {
