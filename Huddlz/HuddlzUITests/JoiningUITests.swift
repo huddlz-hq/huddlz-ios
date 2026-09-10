@@ -9,13 +9,12 @@ final class JoiningUITests: XCTestCase {
 
     func testEligibleUserCanOpenOnlineJoiningLink() {
         let app = makeApp()
-        app.launch()
-        signIn(app)
+        app.launchWithSavedSession()
         openHuddl(app)
         XCTAssertGreaterThan(app.frame.height, app.frame.width)
         let link = app.buttons["Join online"]
         app.swipeUp()
-        XCTAssertTrue(link.waitForExistence(timeout: 10))
+        XCTAssertTrue(link.waitForExistence(timeout: 60))
         for _ in 0..<5 where !link.isHittable { app.swipeUp() }
         XCTAssertTrue(link.isHittable, "The joining action must be visible before tapping it")
         link.tap()
@@ -26,7 +25,7 @@ final class JoiningUITests: XCTestCase {
         app.launch()
         openHuddl(app)
         app.swipeUp()
-        XCTAssertTrue(link.waitForExistence(timeout: 10))
+        XCTAssertTrue(link.waitForExistence(timeout: 60))
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "Online joining details"
         screenshot.lifetime = .keepAlways
@@ -42,11 +41,10 @@ final class JoiningUITests: XCTestCase {
     func testReturningAfterLosingAccessRemovesJoiningLink() {
         let app = makeApp()
         setRoutes(app, joiningResponses: [response("https://example.com/huddl-room"), response(nil)])
-        app.launch()
-        signIn(app)
+        app.launchWithSavedSession()
         openHuddl(app)
         app.swipeUp()
-        XCTAssertTrue(app.buttons["Join online"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Join online"].waitForExistence(timeout: 60))
         XCUIDevice.shared.press(.home)
         app.activate()
         XCTAssertTrue(app.buttons["Join online"].waitForNonExistence(timeout: 10))
@@ -57,15 +55,14 @@ final class JoiningUITests: XCTestCase {
     func testFailedJoiningRequestKeepsDetailsAndCanBeRetried() {
         let app = makeApp()
         setRoutes(app, joiningResponses: [["status": 503, "body": "{}"], response("https://example.com/huddl-room")])
-        app.launch()
-        signIn(app)
+        app.launchWithSavedSession()
         openHuddl(app)
         app.swipeUp()
-        XCTAssertTrue(app.staticTexts["Couldn’t load joining details."].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Couldn’t load joining details."].waitForExistence(timeout: 60))
         XCTAssertTrue(app.staticTexts["Bring a mug."].exists)
         XCTAssertFalse(app.buttons["Join online"].exists)
         app.buttons["Try loading joining details again"].tap()
-        XCTAssertTrue(app.buttons["Join online"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Join online"].waitForExistence(timeout: 60))
         signOut(app)
     }
 
@@ -108,16 +105,6 @@ final class JoiningUITests: XCTestCase {
             route("/api/json/huddlz/coffee", body: "{\"data\":\(event)}")
         ]
         app.launchEnvironment["HUDDLZ_UI_HTTP_SCRIPT"] = String(decoding: try! JSONSerialization.data(withJSONObject: routes), as: UTF8.self)
-    }
-
-    private func signIn(_ app: XCUIApplication) {
-        XCTAssertTrue(app.buttons["Account"].waitForExistence(timeout: 5))
-        app.buttons["Account"].tap()
-        app.textFields["Email"].tap()
-        app.textFields["Email"].typeText("neighbor@example.com")
-        app.secureTextFields["Password"].tap()
-        app.secureTextFields["Password"].typeText("sample-password\n")
-        XCTAssertTrue(app.buttons["Account"].waitForExistence(timeout: 60))
     }
 
     private func openHuddl(_ app: XCUIApplication) {

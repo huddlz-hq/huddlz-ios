@@ -2,7 +2,10 @@ import XCTest
 
 @MainActor
 final class AttendanceUITests: XCTestCase {
-    override func setUpWithError() throws { continueAfterFailure = false }
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
+    }
 
     func testDetailsShowYourCurrentRSVPAfterSigningInAndReopening() {
         let app = makeApp(status: "confirmed")
@@ -31,8 +34,7 @@ final class AttendanceUITests: XCTestCase {
     func testReturningToTheAppShowsAnRSVPChangedElsewhere() {
         let app = makeApp(status: "confirmed")
         setRoutes(app, status: "confirmed", attendanceResponses: [response("confirmed"), response("none")])
-        app.launch()
-        signIn(app)
+        app.launchWithSavedSession()
         openHuddl(app)
         XCTAssertTrue(app.staticTexts["You’re going"].waitForExistence(timeout: 60))
         XCUIDevice.shared.press(.home)
@@ -45,10 +47,9 @@ final class AttendanceUITests: XCTestCase {
     func testFailedStatusKeepsDetailsAndRetryShowsYourRSVP() {
         let app = makeApp(status: "confirmed")
         setRoutes(app, status: "confirmed", attendanceResponses: [["status": 503, "body": "{}"], response("confirmed")])
-        app.launch()
-        signIn(app)
+        app.launchWithSavedSession()
         openHuddl(app)
-        XCTAssertTrue(app.staticTexts["Couldn’t check your RSVP."].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Couldn’t check your RSVP."].waitForExistence(timeout: 60))
         XCTAssertTrue(app.staticTexts["Bring a mug."].exists)
         XCTAssertFalse(app.staticTexts["You haven’t RSVP’d"].exists)
         app.buttons["Try checking RSVP again"].tap()

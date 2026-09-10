@@ -12,7 +12,7 @@
          <TestableReference skipped="NO" parallelizable="NO">
             <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="752ABC04304E183E009352CC" BuildableName="HuddlzTests.xctest" BlueprintName="HuddlzTests" ReferencedContainer="container:Huddlz.xcodeproj"/>
          </TestableReference>
-         <TestableReference skipped="NO" parallelizable="NO">
+         <TestableReference skipped="NO" parallelizable="YES">
             <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="752ABC0E304E183E009352CC" BuildableName="HuddlzUITests.xctest" BlueprintName="HuddlzUITests" ReferencedContainer="container:Huddlz.xcodeproj"/>
          </TestableReference>
       </Testables>

@@ -15,6 +15,9 @@ final class AccountStore {
     private(set) var attendanceRevision = UUID()
     private let tokens: SessionTokenStore
     private let client: AccountClient
+    #if DEBUG
+    private var initialUITestToken: String?
+    #endif
 
     init(client: AccountClient? = nil, tokens: SessionTokenStore? = nil) {
         self.client = client ?? AccountClient()
@@ -30,6 +33,12 @@ final class AccountStore {
             }
             #endif
             self.tokens = SessionTokenStore(service: service)
+            #if DEBUG
+            let environment = ProcessInfo.processInfo.environment
+            if environment["HUDDLZ_UI_HTTP_SCRIPT"] != nil, environment["HUDDLZ_UI_SESSION_ID"] != nil {
+                initialUITestToken = environment["HUDDLZ_UI_INITIAL_TOKEN"]
+            }
+            #endif
         }
     }
 
@@ -40,6 +49,13 @@ final class AccountStore {
         message = nil
         defer { isBusy = false }
         do {
+            #if DEBUG
+            // Seed only the isolated UI-test Keychain, then use normal session restoration.
+            if let token = initialUITestToken {
+                initialUITestToken = nil
+                try await tokens.save(token)
+            }
+            #endif
             guard let token = try await tokens.load() else { user = nil; return }
             user = try await client.currentUser(token: token)
         } catch AccountError.unauthorized {

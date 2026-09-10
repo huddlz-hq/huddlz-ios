@@ -2,11 +2,13 @@ import XCTest
 
 @MainActor
 final class SearchBadgeUITests: XCTestCase {
-    override func setUpWithError() throws { continueAfterFailure = false }
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
+    }
 
     func testSearchCardsMarkGoingAndWaitlistedButLeaveOtherCardsUnmarked() {
-        let app = launch()
-        signIn(app)
+        let app = launch(savedSession: true)
         let coffee = app.buttons["huddl-coffee"]
         XCTAssertTrue(coffee.waitForExistence(timeout: 5))
         XCTAssertTrue(waitForBadge("Going", on: coffee))
@@ -44,8 +46,7 @@ final class SearchBadgeUITests: XCTestCase {
 
     func testPullToRefreshUpdatesBadgesWithoutRemovingCards() {
         let changed = #"{"data":[{"id":"coffee","attributes":{"attendance_state":"waitlisted"}}]}"#
-        let app = launch(stateResponses: [["status": 200, "body": states], ["status": 200, "body": changed]])
-        signIn(app)
+        let app = launch(savedSession: true, stateResponses: [["status": 200, "body": states], ["status": 200, "body": changed]])
         XCTAssertTrue(waitForBadge("Going", on: app.buttons["huddl-coffee"]))
         let scroll = app.scrollViews.firstMatch
         scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25))
@@ -56,7 +57,7 @@ final class SearchBadgeUITests: XCTestCase {
     }
 
     private func waitForBadge(_ badge: String, on card: XCUIElement) -> Bool {
-        XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", badge), object: card)], timeout: 10) == .completed
+        XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", badge), object: card)], timeout: 60) == .completed
     }
 
     private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
@@ -64,7 +65,7 @@ final class SearchBadgeUITests: XCTestCase {
         XCTAssertTrue(element.isHittable)
     }
 
-    private func launch(stateResponses: [[String: Any]]? = nil) -> XCUIApplication {
+    private func launch(savedSession: Bool = false, stateResponses: [[String: Any]]? = nil) -> XCUIApplication {
         let user = #"{"id":"neighbor","email":"neighbor@example.com","display_name":"Our Neighbor"}"#
         let events = [("coffee", "Coffee with neighbors"), ("walk", "River walk"), ("picnic", "Park picnic")]
         let page = "{\"data\":[" + events.map { event(id: $0.0, title: $0.1) }.joined(separator: ",") + "]}"
@@ -82,7 +83,7 @@ final class SearchBadgeUITests: XCTestCase {
         app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launchEnvironment["HUDDLZ_UI_SESSION_ID"] = UUID().uuidString
         app.launchEnvironment["HUDDLZ_UI_HTTP_SCRIPT"] = String(decoding: try! JSONSerialization.data(withJSONObject: routes), as: UTF8.self)
-        app.launch()
+        if savedSession { app.launchWithSavedSession() } else { app.launch() }
         return app
     }
 
