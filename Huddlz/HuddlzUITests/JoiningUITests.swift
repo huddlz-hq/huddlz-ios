@@ -2,16 +2,22 @@ import XCTest
 
 @MainActor
 final class JoiningUITests: XCTestCase {
-    override func setUpWithError() throws { continueAfterFailure = false }
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
+    }
 
     func testEligibleUserCanOpenOnlineJoiningLink() {
         let app = makeApp()
         app.launch()
         signIn(app)
         openHuddl(app)
+        XCTAssertGreaterThan(app.frame.height, app.frame.width)
         let link = app.buttons["Join online"]
         app.swipeUp()
         XCTAssertTrue(link.waitForExistence(timeout: 10))
+        for _ in 0..<5 where !link.isHittable { app.swipeUp() }
+        XCTAssertTrue(link.isHittable, "The joining action must be visible before tapping it")
         link.tap()
         let safari = XCUIApplication(bundleIdentifier: "com.apple.mobilesafari")
         XCTAssertTrue(safari.wait(for: .runningForeground, timeout: 10))
