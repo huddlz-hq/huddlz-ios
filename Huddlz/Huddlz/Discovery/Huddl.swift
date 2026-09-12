@@ -59,9 +59,17 @@ struct Huddl: Identifiable, Decodable, Hashable, Sendable {
         return formatter.string(from: date)
     }
 
+    var timeZone: TimeZone { TimeZone(identifier: attributes.timeZone) ?? .gmt }
+
     var timeZoneLabel: String {
-        let zone = TimeZone(identifier: attributes.timeZone) ?? .gmt
-        return zone.abbreviation(for: attributes.startsAt) ?? attributes.timeZone
+        timeZone.abbreviation(for: attributes.startsAt) ?? attributes.timeZone
+    }
+
+    /// The weekday and start time in the huddl's zone, such as "Thu 9:00 AM"; cards show the date separately.
+    var startTime: String {
+        var style = Date.FormatStyle()
+        style.timeZone = timeZone
+        return attributes.startsAt.formatted(style.weekday(.abbreviated).hour().minute())
     }
 }
 
