@@ -46,7 +46,9 @@ struct AmbientBackground: View {
 
 struct HuddlArtwork: View {
     let huddl: Huddl
-    var isDiscoveryCover = false
+    /// Full-bleed covers (Discover cards, the huddl page) drop the corner radius and tint the fallback by event type.
+    var fullBleed = false
+    var symbolSize: CGFloat = 58
 
     var body: some View {
         Color.clear
@@ -56,23 +58,81 @@ struct HuddlArtwork: View {
                     image.resizable().scaledToFill()
                 } placeholder: {
                     ZStack {
-                        if isDiscoveryCover {
+                        if fullBleed {
                             LinearGradient(colors: [tint.opacity(0.22), tint.opacity(0.06)],
                                            startPoint: .topLeading, endPoint: .bottomTrailing)
                         } else {
                             HuddlStyle.accent.opacity(0.10)
                         }
                         Image(systemName: huddl.attributes.eventType.symbol)
-                            .font(.system(size: 58, weight: .medium))
+                            .font(.system(size: symbolSize, weight: .medium))
                             .foregroundStyle(tint)
                     }
                 }
             }
-            .clipShape(.rect(cornerRadius: isDiscoveryCover ? 0 : 24))
+            .clipShape(.rect(cornerRadius: fullBleed ? 0 : 24))
             .accessibilityHidden(true)
     }
 
-    private var tint: Color { isDiscoveryCover ? huddl.attributes.eventType.tint : HuddlStyle.accent }
+    private var tint: Color { fullBleed ? huddl.attributes.eventType.tint : HuddlStyle.accent }
+}
+
+/// A 48-point glass tile with the month over the day, as on the web app's cards.
+struct DateStamp: View {
+    let date: Date
+    let timeZone: TimeZone
+
+    var body: some View {
+        VStack(spacing: 1) {
+            Text(date.formatted(style.month(.abbreviated)).uppercased())
+                .font(.system(size: 10, weight: .bold))
+                .tracking(0.8)
+                .foregroundStyle(HuddlStyle.accent)
+            Text(date.formatted(style.day()))
+                .font(.system(size: 18, weight: .bold))
+        }
+        .frame(width: 48, height: 48)
+        .glassEffect(.regular, in: .rect(cornerRadius: 12))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(date.formatted(style.month(.abbreviated).day()))
+    }
+
+    private var style: Date.FormatStyle {
+        var style = Date.FormatStyle()
+        style.timeZone = timeZone
+        return style
+    }
+}
+
+/// A small pill naming the event type in its color.
+struct EventTypePill: View {
+    let eventType: EventType
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Circle().frame(width: 6, height: 6)
+            Text(eventType.title)
+        }
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(eventType.tint)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(eventType.tint.opacity(0.12), in: .capsule)
+    }
+}
+
+/// The rounded surface card used for grouped rows on detail pages.
+struct SurfaceCard: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .background(HuddlStyle.surface)
+            .clipShape(.rect(cornerRadius: HuddlStyle.cardRadius))
+            .overlay { RoundedRectangle(cornerRadius: HuddlStyle.cardRadius).strokeBorder(.quaternary) }
+    }
+}
+
+extension View {
+    func surfaceCard() -> some View { modifier(SurfaceCard()) }
 }
 
 struct HuddlCard: View {
