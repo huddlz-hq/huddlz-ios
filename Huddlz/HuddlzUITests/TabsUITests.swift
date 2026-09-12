@@ -81,15 +81,42 @@ final class TabsUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Sign in to see your groups"].waitForExistence(timeout: 5))
     }
 
-    private func launch(savedSession: Bool = false) -> XCUIApplication {
+    func testFailedSignInFromAgendaKeepsTheFormAndEmail() {
+        let app = launch()
+        XCTAssertTrue(app.tabBars.buttons["Agenda"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["Agenda"].tap()
+        app.buttons["Sign in"].tap()
+        XCTAssertTrue(app.textFields["Email"].waitForExistence(timeout: 5))
+        app.textFields["Email"].tap()
+        app.textFields["Email"].typeText("neighbor@example.com")
+        app.secureTextFields["Password"].tap()
+        app.secureTextFields["Password"].typeText("wrong-password\n")
+        XCTAssertTrue(app.staticTexts["The email or password is incorrect. Try again."].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.textFields["Email"].value as? String, "neighbor@example.com")
+    }
+
+    func testReturningToDiscoverKeepsResultsWhenOffline() {
+        let app = launch(discoveryResponses: [
+            ["status": 200, "body": page([coffee, hike])],
+            ["status": 503, "body": "{}"]
+        ])
+        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["Agenda"].tap()
+        XCTAssertTrue(app.staticTexts["Sign in to see your agenda"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["Discover"].tap()
+        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 10))
+    }
+
+    private func launch(savedSession: Bool = false, discoveryResponses: [[String: Any]]? = nil) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launchEnvironment["HUDDLZ_UI_SESSION_ID"] = UUID().uuidString
         let user = #"{"id":"user-1","display_name":"Nia Neighbor","email":"nia@example.com"}"#
         let routes: [[String: Any]] = [
+            ["path": "/api/auth/sign_in", "query": [:], "responses": [["status": 401, "body": "{}", "delaySeconds": 2]]],
             ["path": "/api/json/huddlz", "query": ["query": "coffee", "date_filter": "this_week"],
              "responses": [["status": 200, "body": page([coffee])]]],
-            ["path": "/api/json/huddlz", "query": [:], "responses": [["status": 200, "body": page([coffee, hike])]]],
+            ["path": "/api/json/huddlz", "query": [:], "responses": discoveryResponses ?? [["status": 200, "body": page([coffee, hike])]]],
             ["path": "/api/auth/me", "query": [:], "responses": [["status": 200, "body": "{\"user\":\(user)}"]]],
             ["path": "/api/json/profile", "query": [:], "responses": [["status": 200, "body": "{\"data\":{\"type\":\"profile\",\"id\":\"user-1\",\"attributes\":{}}}"]]]
         ]

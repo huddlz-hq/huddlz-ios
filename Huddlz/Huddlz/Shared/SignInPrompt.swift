@@ -5,7 +5,7 @@ struct SignInPrompt: View {
     let title: String
     let symbol: String
     let description: String
-    @State private var showsAccount = false
+    let signIn: () -> Void
 
     var body: some View {
         ContentUnavailableView {
@@ -13,10 +13,9 @@ struct SignInPrompt: View {
         } description: {
             Text(description)
         } actions: {
-            Button("Sign in") { showsAccount = true }
+            Button("Sign in", action: signIn)
                 .buttonStyle(.borderedProminent)
         }
-        .sheet(isPresented: $showsAccount) { AccountView() }
     }
 }
 
@@ -27,14 +26,20 @@ struct SignedInContent<Content: View>: View {
     let description: String
     @ViewBuilder let content: () -> Content
     @Environment(AccountStore.self) private var account
+    @State private var showsAccount = false
 
     var body: some View {
-        if account.user != nil {
-            content()
-        } else if account.isBusy {
-            ProgressView("Checking your account…")
-        } else {
-            SignInPrompt(title: title, symbol: symbol, description: description)
+        Group {
+            if account.user != nil {
+                content()
+            } else if account.isBusy {
+                ProgressView("Checking your account…")
+            } else {
+                SignInPrompt(title: title, symbol: symbol, description: description) {
+                    showsAccount = true
+                }
+            }
         }
+        .sheet(isPresented: $showsAccount) { AccountView() }
     }
 }
