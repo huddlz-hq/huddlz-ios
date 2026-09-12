@@ -21,3 +21,17 @@ Use Zinsser’s four principles in all writing and responses, including document
 - Stub only external service boundaries, such as HTTP, Apple Maps, and Core Location. Keep the app’s request building, decoding, logic, and views real. Use native simulation and real system permission prompts where available; inject service failures only when needed to exercise recovery reliably. Check results people can observe, not private methods or internal calls.
 - Keep tests independent of live data. Check the real backend separately, and report those checks separately from behavior tests.
 - Run focused tests as you work and the full suite before handoff. Passing launch checks does not mean a feature is tested.
+
+## Agent skills
+
+### Issue tracker
+
+Use GitHub Issues for this repo. Before reading or updating tickets, read `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the five default triage labels. Before triaging issues, read `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Use a single root `CONTEXT.md` and `docs/adr/`. Before exploring domain terms or decisions, read `docs/agents/domain.md`.
