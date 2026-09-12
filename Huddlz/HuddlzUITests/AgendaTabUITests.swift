@@ -45,6 +45,7 @@ final class AgendaTabUITests: XCTestCase {
         let app = launch(agendaResponses: [["status": 200, "body": page([])]])
         openAgenda(app)
         XCTAssertTrue(app.staticTexts["Nothing on your agenda"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Your RSVPs and waitlists, by date."].exists)
         XCTAssertTrue(app.staticTexts["RSVP to a huddl in Discover and it will show up here."].exists)
         XCTAssertFalse(app.buttons["Sign in"].exists)
     }
