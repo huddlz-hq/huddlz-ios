@@ -104,20 +104,60 @@ struct DateStamp: View {
     }
 }
 
+/// A small capsule with a dot and a label in one tint: event types on cards, RSVP states on the agenda.
+struct TintPill: View {
+    let title: String
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Circle().frame(width: 6, height: 6)
+            Text(title)
+        }
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(tint)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(tint.opacity(0.12), in: .capsule)
+    }
+}
+
 /// A small pill naming the event type in its color.
 struct EventTypePill: View {
     let eventType: EventType
 
     var body: some View {
-        HStack(spacing: 6) {
-            Circle().frame(width: 6, height: 6)
-            Text(eventType.title)
+        TintPill(title: eventType.title, tint: eventType.tint)
+    }
+}
+
+/// The wordmark and glass Account button that open each tab, as on the web app's header.
+struct BrandHeader: View {
+    let openAccount: () -> Void
+
+    var body: some View {
+        HStack {
+            HStack(spacing: 10) {
+                Text("h")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(Color(uiColor: .systemBackground))
+                    .frame(width: 28, height: 28)
+                    .background(HuddlStyle.accent, in: .rect(cornerRadius: 8))
+                    .accessibilityHidden(true)
+                Text("huddlz")
+                    .font(.system(size: 16, weight: .heavy))
+                    .tracking(-0.5)
+            }
+            Spacer(minLength: 8)
+            Button(action: openAccount) {
+                Image(systemName: "person.crop.circle")
+                    .font(.title3)
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.glass)
+            .buttonBorderShape(.circle)
+            .accessibilityLabel("Account")
         }
-        .font(.caption.weight(.semibold))
-        .foregroundStyle(eventType.tint)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(eventType.tint.opacity(0.12), in: .capsule)
     }
 }
 

@@ -1,64 +1,101 @@
 import SwiftUI
 
 struct AgendaView: View {
-    var body: some View {
-        NavigationStack {
-            SignedInContent(title: "Sign in to see your agenda", symbol: "calendar",
-                            description: "Your RSVPs and waitlists, by date.") {
-                AgendaList()
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(HuddlStyle.background)
-            .navigationTitle("Agenda")
-        }
-    }
-}
-
-private struct AgendaList: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(AccountStore.self) private var account
     @State private var store = AgendaStore()
     @State private var retry = UUID()
+    @State private var isShowingAccount = false
 
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 12) {
-                if store.isLoading {
-                    ProgressView("Loading your agenda…")
-                        .frame(maxWidth: .infinity, minHeight: 180)
-                } else if store.loadFailed {
-                    ContentUnavailableView {
-                        Label("Couldn’t load your agenda", systemImage: "calendar.badge.exclamationmark")
-                    } description: {
-                        Text("Check your connection and try again.")
-                    } actions: {
-                        Button("Try loading your agenda again") { retry = UUID() }
-                            .buttonStyle(.borderedProminent)
-                    }
-                } else if store.loadedUserID != nil, store.days.isEmpty {
-                    ContentUnavailableView("Nothing on your agenda", systemImage: "calendar",
-                                           description: Text("RSVP to a huddl in Discover and it will show up here."))
-                } else {
-                    ForEach(store.days) { day in
-                        Text(day.title)
-                            .font(.subheadline.bold())
+        NavigationStack {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 20) {
+                    BrandHeader { isShowingAccount = true }
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Your agenda")
+                            .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                        Text(subtitle)
                             .foregroundStyle(.secondary)
-                            .padding(.top, 8)
-                            .accessibilityAddTraits(.isHeader)
-                        ForEach(day.entries) { entry in
-                            NavigationLink { HuddlDetailView(id: entry.id) } label: { AgendaRow(entry: entry) }
-                                .buttonStyle(.plain)
-                                .accessibilityIdentifier("agenda-\(entry.id)")
-                        }
+                    }
+                    SignedInContent(title: "Sign in to see your agenda", symbol: "calendar",
+                                    description: "Your RSVPs and waitlists, by date.") {
+                        // One view, so the day cards share the stack's spacing and the sign-in sheet attaches once.
+                        VStack(alignment: .leading, spacing: 20) { list }
                     }
                 }
+                .padding(20)
+                .frame(maxWidth: 640)
+                .frame(maxWidth: .infinity)
             }
-            .padding(20)
-            .frame(maxWidth: 640)
-            .frame(maxWidth: .infinity)
+            .background { AmbientBackground() }
+            .toolbar(horizontalSizeClass == .compact ? .hidden : .automatic, for: .navigationBar)
+            .navigationTitle("Agenda")
+            // RSVP changes anywhere in the app bump the account's attendance revision.
+            .task(id: RequestID(userID: account.user?.id, retry: retry, attendanceRevision: account.attendanceRevision)) {
+                await store.load(account: account)
+            }
         }
-        // RSVP changes anywhere in the app bump the account's attendance revision.
-        .task(id: RequestID(userID: account.user?.id, retry: retry, attendanceRevision: account.attendanceRevision)) {
-            await store.load(account: account)
+        .sheet(isPresented: $isShowingAccount) { AccountView() }
+    }
+
+    /// Counts the loaded huddlz; otherwise says what the tab holds.
+    private var subtitle: String {
+        let count = store.days.reduce(0) { $0 + $1.entries.count }
+        guard account.user != nil, store.loadedUserID != nil, count > 0 else {
+            return "The huddlz you’re going to, soonest first."
+        }
+        if count == 1 { return "One huddl coming up." }
+        let number = count < 10 ? Self.spelledOut.string(from: count as NSNumber) ?? "\(count)" : count.formatted()
+        return "\(number.prefix(1).uppercased())\(number.dropFirst()) huddlz coming up."
+    }
+
+    private static let spelledOut: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .spellOut
+        return formatter
+    }()
+
+    @ViewBuilder private var list: some View {
+        if store.isLoading {
+            ProgressView("Loading your agenda…")
+                .frame(maxWidth: .infinity, minHeight: 180)
+        } else if store.loadFailed {
+            ContentUnavailableView {
+                Label("Couldn’t load your agenda", systemImage: "calendar.badge.exclamationmark")
+            } description: {
+                Text("Check your connection and try again.")
+            } actions: {
+                Button("Try loading your agenda again") { retry = UUID() }
+                    .buttonStyle(.glassProminent)
+            }
+        } else if store.loadedUserID != nil, store.days.isEmpty {
+            ContentUnavailableView("Nothing on your agenda", systemImage: "calendar",
+                                   description: Text("RSVP to a huddl in Discover and it will show up here."))
+        } else {
+            ForEach(store.days) { day in
+                daySection(day)
+            }
+        }
+    }
+
+    /// A day's huddlz share one card under a small heading, as on the canvas.
+    private func daySection(_ day: AgendaDay) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(day.title)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.leading, 4)
+                .accessibilityAddTraits(.isHeader)
+            VStack(spacing: 0) {
+                ForEach(Array(day.entries.enumerated()), id: \.element.id) { index, entry in
+                    if index > 0 { Divider().padding(.horizontal, 16) }
+                    NavigationLink { HuddlDetailView(id: entry.id) } label: { AgendaRow(entry: entry) }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("agenda-\(entry.id)")
+                }
+            }
+            .surfaceCard()
         }
     }
 
@@ -73,49 +110,36 @@ private struct AgendaRow: View {
     let entry: AgendaEntry
 
     private var huddl: Huddl { entry.huddl }
-    private var zone: TimeZone { TimeZone(identifier: huddl.attributes.timeZone) ?? .gmt }
-
-    private func stamp(_ template: String) -> String {
-        let formatter = DateFormatter()
-        formatter.timeZone = zone
-        formatter.setLocalizedDateFormatFromTemplate(template)
-        return formatter.string(from: huddl.attributes.startsAt)
-    }
-
-    private var startTime: String {
-        let formatter = DateFormatter()
-        formatter.timeZone = zone
-        formatter.timeStyle = .short
-        return "\(formatter.string(from: huddl.attributes.startsAt)) \(huddl.timeZoneLabel)"
-    }
+    private var time: String { "\(huddl.startClock) \(huddl.timeZoneLabel)" }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(spacing: 2) {
-                Text(stamp("MMM").uppercased())
-                    .font(.caption2.bold())
-                    .foregroundStyle(HuddlStyle.accent)
-                Text(stamp("d"))
-                    .font(.title3.bold())
-            }
-            .frame(width: 48, height: 48)
-            .background(HuddlStyle.accent.opacity(0.10), in: .rect(cornerRadius: 12))
-            VStack(alignment: .leading, spacing: 4) {
+        HStack(spacing: 12) {
+            DateStamp(date: huddl.attributes.startsAt, timeZone: huddl.timeZone)
+            VStack(alignment: .leading, spacing: 3) {
                 Text(huddl.title).font(.headline)
-                Text("\(startTime) · \(huddl.location)")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Label(entry.attendance == .waitlisted ? "Waitlisted" : "Going",
-                      systemImage: entry.attendance.symbol)
-                    .font(.caption.bold())
-                    .foregroundStyle(HuddlStyle.accent)
+                // The meta line stacks at larger text sizes instead of squeezing the location.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        Text(time)
+                        Circle().fill(.tertiary).frame(width: 3, height: 3)
+                        Text(huddl.location).lineLimit(1)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(time)
+                        Text(huddl.location).lineLimit(2)
+                    }
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
             }
-            Spacer(minLength: 8)
-            Image(systemName: "chevron.right").font(.subheadline).foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            TintPill(title: entry.attendance == .waitlisted ? "Waitlisted" : "Going",
+                     tint: entry.attendance == .waitlisted ? HuddlStyle.hybrid : HuddlStyle.accent)
+                .fixedSize()
         }
-        .padding(16)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-        .background(HuddlStyle.surface, in: .rect(cornerRadius: 20))
         .contentShape(.rect)
         .accessibilityElement(children: .combine)
     }
