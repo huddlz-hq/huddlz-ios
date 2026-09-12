@@ -31,7 +31,13 @@ Keep new code grouped by feature as features are added. Add shared UI and networ
 
 ## Tabs
 
-The app opens on Discover, the search tab, which keeps the discovery journey below unchanged. Agenda and Groups sit in the tab bar beside it; the bar shrinks while scrolling down and returns when scrolling up. Switching tabs and back keeps the search text, filters, and results in place. Signed-out visitors see what each tab will hold and a “Sign in” action that opens the account sheet in place; the tab checks the saved session before offering sign-in. Signed-in agenda and groups content arrives with the next steps under #4. The selected tab survives rotation and backgrounding through scene storage; the app does not promise it across a relaunch.
+The app opens on Discover, the search tab, which keeps the discovery journey below unchanged. Agenda and Groups sit in the tab bar beside it; the bar shrinks while scrolling down and returns when scrolling up. Switching tabs and back keeps the search text, filters, and results in place. Signed-out visitors see what each tab will hold and a “Sign in” action that opens the account sheet in place; the tab checks the saved session before offering sign-in. Signed-in agenda content arrives with the next step under #4. The selected tab survives rotation and backgrounding through scene storage; the app does not promise it across a relaunch.
+
+## Groups
+
+The Groups tab lists the groups the signed-in member owns or has joined, alphabetically as the API returns them, with each group’s name and location. Tap a group to open the same group page discovery uses, with its description, location, and upcoming huddlz; native back returns to the list. Members of no groups read how to join one from a huddl’s group page. A failed request offers retry. Twenty groups load at a time; “Load more groups” appends the next batch and a failed batch keeps the list with retry. Signing out returns the tab to the sign-in prompt and clears the list; signing in again loads that account’s groups. The list loads once per signed-in account and after retry; it does not yet refresh on its own when the app returns to the foreground.
+
+The tab uses the authenticated `GET /api/json/groups/mine?page[limit]=20` route with the account client’s cookie-free, redirect-free session. Pagination follows only the API’s own same-origin `links.next` for that route. Responses for a previous account are discarded. Member counts and next-huddl summaries are not in the API response and are not invented.
 
 ## Public discovery
 
