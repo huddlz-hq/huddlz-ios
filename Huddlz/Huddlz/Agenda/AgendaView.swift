@@ -43,7 +43,7 @@ struct AgendaView: View {
     private var subtitle: String {
         let count = store.days.reduce(0) { $0 + $1.entries.count }
         guard account.user != nil, store.loadedUserID != nil, count > 0 else {
-            return "The huddlz you’re going to, soonest first."
+            return "Your RSVPs and waitlists, by date."
         }
         if count == 1 { return "One huddl coming up." }
         let number = count < 10 ? Self.spelledOut.string(from: count as NSNumber) ?? "\(count)" : count.formatted()
