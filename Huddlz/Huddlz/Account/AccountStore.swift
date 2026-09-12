@@ -130,6 +130,10 @@ final class AccountStore {
         return states
     }
 
+    func agenda() async throws -> [AgendaEntry] {
+        try await forCurrentUser { token in try await client.agenda(token: token) }
+    }
+
     func groups() async throws -> GroupsPage {
         try await forCurrentUser { token in try await client.groups(token: token) }
     }

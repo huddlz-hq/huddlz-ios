@@ -108,17 +108,7 @@ struct DiscoveryClient {
             if response.statusCode == 404 { throw DiscoveryError.notFound }
             throw DiscoveryError.unavailable
         }
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        decoder.dateDecodingStrategy = .custom { decoder in
-            let text = try decoder.singleValueContainer().decode(String.self)
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            if let date = formatter.date(from: text) { return date }
-            formatter.formatOptions = [.withInternetDateTime]
-            if let date = formatter.date(from: text) { return date }
-            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Invalid event date"))
-        }
+        let decoder = JSONDecoder.huddlz
         do { return try decoder.decode(Value.self, from: data) }
         catch { throw DiscoveryError.invalidResponse }
     }

@@ -40,7 +40,7 @@ final class TabsUITests: XCTestCase {
         let app = launch(savedSession: true)
         XCTAssertTrue(app.tabBars.buttons["Agenda"].waitForExistence(timeout: 5))
         app.tabBars.buttons["Agenda"].tap()
-        XCTAssertTrue(app.staticTexts["Your agenda"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Nothing on your agenda"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["Sign in"].exists)
         app.tabBars.buttons["Groups"].tap()
         XCTAssertTrue(app.staticTexts["No groups yet"].waitForExistence(timeout: 5))
@@ -117,6 +117,7 @@ final class TabsUITests: XCTestCase {
             ["path": "/api/json/huddlz", "query": ["query": "coffee", "date_filter": "this_week"],
              "responses": [["status": 200, "body": page([coffee])]]],
             ["path": "/api/json/huddlz", "query": [:], "responses": discoveryResponses ?? [["status": 200, "body": page([coffee, hike])]]],
+            ["path": "/api/json/huddlz/upcoming", "query": [:], "responses": [["status": 200, "body": "{\"data\":[]}"]]],
             ["path": "/api/json/groups/mine", "query": [:], "responses": [["status": 200, "body": "{\"data\":[]}"]]],
             ["path": "/api/auth/me", "query": [:], "responses": [["status": 200, "body": "{\"user\":\(user)}"]]],
             ["path": "/api/json/profile", "query": [:], "responses": [["status": 200, "body": "{\"data\":{\"type\":\"profile\",\"id\":\"user-1\",\"attributes\":{}}}"]]]

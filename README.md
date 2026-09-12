@@ -31,7 +31,13 @@ Keep new code grouped by feature as features are added. Add shared UI and networ
 
 ## Tabs
 
-The app opens on Discover, the search tab, which keeps the discovery journey below unchanged. Agenda and Groups sit in the tab bar beside it; the bar shrinks while scrolling down and returns when scrolling up. Switching tabs and back keeps the search text, filters, and results in place. Signed-out visitors see what each tab will hold and a “Sign in” action that opens the account sheet in place; the tab checks the saved session before offering sign-in. Signed-in agenda content arrives with the next step under #4. The selected tab survives rotation and backgrounding through scene storage; the app does not promise it across a relaunch.
+The app opens on Discover, the search tab, which keeps the discovery journey below unchanged. Agenda and Groups sit in the tab bar beside it; the bar shrinks while scrolling down and returns when scrolling up. Switching tabs and back keeps the search text, filters, and results in place. Signed-out visitors see what each tab will hold and a “Sign in” action that opens the account sheet in place; the tab checks the saved session before offering sign-in. The selected tab survives rotation and backgrounding through scene storage; the app does not promise it across a relaunch.
+
+## Agenda
+
+The Agenda tab lists the upcoming huddlz the signed-in member is going to or waitlisted for, soonest first, with adjacent huddlz grouped by day in each huddl’s own time zone. A day heading can repeat when time zones cross date boundaries, keeping the list chronological. Each row shows the date, title, start time with the event’s zone, location, and whether you are going or waitlisted. Tap a row to open the same huddl page discovery uses; native back returns to the agenda. Members with no upcoming RSVPs read that RSVPing to a huddl in Discover adds it here. A failed request offers retry. RSVP changes made in the app reload the agenda, so a cancelled RSVP disappears on return; changes made on the website appear on the next load or retry. Signing out returns the tab to the sign-in prompt and clears the list.
+
+The tab uses the authenticated `GET /api/json/huddlz/upcoming?filter[attendance_state][in][]=confirmed&filter[attendance_state][in][]=waitlisted` route with the account client’s cookie-free, redirect-free session. The route returns every match with no pagination (verified September 12, 2026: the filter is accepted and `page[limit]` is ignored), sorted by start time, and the app sorts again before grouping. Responses for a previous account are discarded, and rows without an RSVP are dropped.
 
 ## Groups
 
