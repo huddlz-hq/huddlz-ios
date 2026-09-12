@@ -82,6 +82,10 @@ struct Huddl: Identifiable, Decodable, Hashable, Sendable {
         let end = sameDay
             ? attributes.endsAt.formatted(zoned.hour().minute())
             : attributes.endsAt.formatted(zoned.weekday(.abbreviated).month(.abbreviated).day().hour().minute())
+        if timeZone.secondsFromGMT(for: attributes.startsAt) != timeZone.secondsFromGMT(for: attributes.endsAt) {
+            let endZone = timeZone.abbreviation(for: attributes.endsAt) ?? attributes.timeZone
+            return "\(start) \(timeZoneLabel) – \(end) \(endZone)"
+        }
         return "\(start) – \(end) \(timeZoneLabel)"
     }
 
