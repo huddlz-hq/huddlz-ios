@@ -67,9 +67,36 @@ struct Huddl: Identifiable, Decodable, Hashable, Sendable {
 
     /// The weekday and start time in the huddl's zone, such as "Thu 9:00 AM"; cards show the date separately.
     var startTime: String {
+        attributes.startsAt.formatted(zoned.weekday(.abbreviated).hour().minute())
+    }
+
+    /// The start day in the huddl's zone, such as "Thursday, September 10".
+    var dayTitle: String {
+        attributes.startsAt.formatted(zoned.weekday(.wide).month(.wide).day())
+    }
+
+    /// The start and end times in the huddl's zone; an end on a later day names that day.
+    var timeRange: String {
+        let start = attributes.startsAt.formatted(zoned.hour().minute())
+        let sameDay = dayKey(attributes.startsAt) == dayKey(attributes.endsAt)
+        let end = sameDay
+            ? attributes.endsAt.formatted(zoned.hour().minute())
+            : attributes.endsAt.formatted(zoned.weekday(.abbreviated).month(.abbreviated).day().hour().minute())
+        if timeZone.secondsFromGMT(for: attributes.startsAt) != timeZone.secondsFromGMT(for: attributes.endsAt) {
+            let endZone = timeZone.abbreviation(for: attributes.endsAt) ?? attributes.timeZone
+            return "\(start) \(timeZoneLabel) – \(end) \(endZone)"
+        }
+        return "\(start) – \(end) \(timeZoneLabel)"
+    }
+
+    private var zoned: Date.FormatStyle {
         var style = Date.FormatStyle()
         style.timeZone = timeZone
-        return attributes.startsAt.formatted(style.weekday(.abbreviated).hour().minute())
+        return style
+    }
+
+    private func dayKey(_ date: Date) -> String {
+        date.formatted(zoned.year().month().day())
     }
 }
 

@@ -1,39 +1,12 @@
 import SwiftUI
 
-/// A 48-point glass tile with the month over the day, as on the web app's cards.
-struct DateStamp: View {
-    let date: Date
-    let timeZone: TimeZone
-
-    var body: some View {
-        VStack(spacing: 1) {
-            Text(date.formatted(style.month(.abbreviated)).uppercased())
-                .font(.system(size: 10, weight: .bold))
-                .tracking(0.8)
-                .foregroundStyle(HuddlStyle.accent)
-            Text(date.formatted(style.day()))
-                .font(.system(size: 18, weight: .bold))
-        }
-        .frame(width: 48, height: 48)
-        .glassEffect(.regular, in: .rect(cornerRadius: 12))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(date.formatted(style.month(.abbreviated).day()))
-    }
-
-    private var style: Date.FormatStyle {
-        var style = Date.FormatStyle()
-        style.timeZone = timeZone
-        return style
-    }
-}
-
 struct DiscoveryHuddlCard: View {
     let huddl: Huddl
     var attendance: AttendanceState? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HuddlArtwork(huddl: huddl, isDiscoveryCover: true)
+            HuddlArtwork(huddl: huddl, fullBleed: true)
                 .overlay(alignment: .top) {
                     HStack(alignment: .top) {
                         DateStamp(date: huddl.attributes.startsAt, timeZone: huddl.timeZone)
@@ -71,9 +44,7 @@ struct DiscoveryHuddlCard: View {
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .background(HuddlStyle.surface)
-        .clipShape(.rect(cornerRadius: HuddlStyle.cardRadius))
-        .overlay { RoundedRectangle(cornerRadius: HuddlStyle.cardRadius).strokeBorder(.quaternary) }
+        .surfaceCard()
         .accessibilityElement(children: .combine)
     }
 

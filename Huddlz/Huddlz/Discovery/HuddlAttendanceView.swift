@@ -34,26 +34,26 @@ struct HuddlAttendanceView: View {
         VStack(alignment: .leading, spacing: 12) {
             if let user = account.user {
                 if status.loadedUserID == user.id, let attendance = status.attendance {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Label(attendance.title, systemImage: attendance.symbol)
-                            .font(.headline)
-                            .foregroundStyle(HuddlStyle.accent)
-                        if acceptsChanges {
-                            Button(attendance == .none ? "RSVP" : (attendance == .waitlisted ? "Leave waitlist" : "Cancel RSVP")) {
-                                guard acceptsChanges else { return }
-                                Task { await status.change(huddlID: id, action: attendance == .none ? .reserve : .cancel, account: account) }
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(status.isChanging)
-                        } else {
-                            Text("RSVPs are closed for this huddl.").foregroundStyle(.secondary)
+                    // The RSVP row: state on the left, the one action on the right; it stacks at large text sizes.
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 12) {
+                            state(attendance)
+                            Spacer(minLength: 8)
+                            action(for: attendance)
                         }
-                        if status.isChanging { ProgressView("Updating RSVP…") }
+                        VStack(alignment: .leading, spacing: 12) {
+                            state(attendance)
+                            action(for: attendance)
+                        }
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .surfaceCard()
                 } else if status.loadedUserID == user.id, status.loadFailed {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Couldn’t check your RSVP.").foregroundStyle(.secondary)
-                        Button("Try checking RSVP again") { retry = UUID() }.buttonStyle(.bordered)
+                        Button("Try checking RSVP again") { retry = UUID() }.buttonStyle(.glass)
                     }
                 } else {
                     ProgressView("Checking your RSVP…")
@@ -61,7 +61,10 @@ struct HuddlAttendanceView: View {
             } else if !acceptsChanges {
                 Text("RSVPs are closed for this huddl.").foregroundStyle(.secondary)
             } else {
-                Button("Sign in to RSVP") { showsAccount = true }.buttonStyle(.borderedProminent)
+                Button { showsAccount = true } label: {
+                    Text("Sign in to RSVP").frame(maxWidth: .infinity, minHeight: 32)
+                }
+                .buttonStyle(.glassProminent)
             }
             if let actionError = status.actionError { Text(actionError).foregroundStyle(.secondary) }
         }
@@ -73,6 +76,42 @@ struct HuddlAttendanceView: View {
                 status.clear()
             }
         }
+    }
+
+    private func state(_ attendance: AttendanceState) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: attendance.symbol)
+                .font(.title2)
+                .foregroundStyle(HuddlStyle.accent)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(attendance.title).font(.headline)
+                if status.isChanging {
+                    ProgressView("Updating RSVP…").font(.footnote).controlSize(.small)
+                } else if !acceptsChanges {
+                    Text("RSVPs are closed for this huddl.").font(.footnote).foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func action(for attendance: AttendanceState) -> some View {
+        if acceptsChanges {
+            if attendance == .none {
+                Button("RSVP") { change(.reserve) }
+                    .buttonStyle(.glassProminent)
+                    .disabled(status.isChanging)
+            } else {
+                Button(attendance == .waitlisted ? "Leave waitlist" : "Cancel RSVP") { change(.cancel) }
+                    .buttonStyle(.glass)
+                    .disabled(status.isChanging)
+            }
+        }
+    }
+
+    private func change(_ action: RSVPAction) {
+        guard acceptsChanges else { return }
+        Task { await status.change(huddlID: id, action: action, account: account) }
     }
 
     private var acceptsChanges: Bool { lifecycleState == "published" && endsAt > Date.now }

@@ -45,8 +45,7 @@ struct HuddlLocationView: View {
             .accessibilityIdentifier("Open location in Maps")
             .accessibilityHint("Opens this location in Apple Maps")
         }
-        .background(HuddlStyle.surface, in: .rect(cornerRadius: 24))
-        .clipShape(.rect(cornerRadius: 24))
+        .surfaceCard()
         .task { await location.resolve() }
     }
 }

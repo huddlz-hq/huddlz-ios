@@ -79,12 +79,10 @@ final class DiscoveryUITests: DiscoveryUITestCase {
         XCTAssertTrue(app.staticTexts["Bring a mug and meet your neighbors."].exists)
         XCTAssertTrue(app.staticTexts["Juniper Café"].exists)
         XCTAssertTrue(app.staticTexts["America/New_York"].exists)
-        let start = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Starts:")).firstMatch
-        let end = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Ends:")).firstMatch
-        XCTAssertTrue(start.label.contains("Sep 10, 2026"))
-        XCTAssertTrue(start.label.contains("9:00"))
-        XCTAssertTrue(end.label.contains("Sep 11, 2026"))
-        XCTAssertTrue(end.label.contains("12:00"))
+        // The date card names the day, then the range in the event's zone; a later end day is spelled out.
+        XCTAssertTrue(app.staticTexts["Thursday, September 10"].exists)
+        let range = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "9:00")).firstMatch
+        XCTAssertEqual(range.label.replacingOccurrences(of: "\u{202F}", with: " "), "9:00 AM – Fri, Sep 11 at 12:00 PM EDT")
         app.navigationBars.buttons.firstMatch.tap()
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 5))
         XCTAssertEqual(app.searchFields.firstMatch.value as? String, "coffee")
@@ -611,8 +609,7 @@ final class DiscoveryArtworkUITests: DiscoveryUITestCase {
         card.tap()
         XCTAssertTrue(app.staticTexts["About this huddl"].waitForExistence(timeout: 5))
         let detailImage = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            Self.artworkPixelFraction(app, region: CGRect(x: 20, y: app.navigationBars.firstMatch.frame.maxY + 20,
-                width: app.frame.width - 40, height: (app.frame.width - 40) * 9 / 16)) > 0.9
+            Self.artworkPixelFraction(app, region: Self.detailArtwork(app)) > 0.9
         }, object: nil)
         XCTAssertEqual(XCTWaiter.wait(for: [detailImage], timeout: 8), .completed)
     }
@@ -636,9 +633,7 @@ final class DiscoveryArtworkUITests: DiscoveryUITestCase {
                                  "Expected the event-type illustration for image response \(imageResponse)")
             card.tap()
             XCTAssertTrue(app.staticTexts["Bring a mug and meet your neighbors."].waitForExistence(timeout: 5))
-            let artwork = CGRect(x: 20, y: app.navigationBars.firstMatch.frame.maxY + 20,
-                                 width: app.frame.width - 40, height: (app.frame.width - 40) * 9 / 16)
-            XCTAssertGreaterThan(Self.artworkPixelFraction(app, fallback: true, region: artwork), 0.01,
+            XCTAssertGreaterThan(Self.artworkPixelFraction(app, fallback: true, region: Self.detailArtwork(app)), 0.01,
                                  "Expected fallback artwork in details for image response \(imageResponse)")
             app.navigationBars.buttons.firstMatch.tap()
             XCTAssertTrue(card.waitForExistence(timeout: 5))
@@ -671,6 +666,11 @@ class DiscoveryUITestCase: XCTestCase {
     /// The card cover below its date stamp and tag, so the glass overlays cannot skew the pixel count.
     fileprivate static func cardArtwork(_ card: XCUIElement) -> CGRect {
         CGRect(x: 8, y: 64, width: card.frame.width - 16, height: card.frame.width * 9 / 16 - 64)
+    }
+
+    /// The upper part of the full-width detail cover, above the fade into the page background.
+    fileprivate static func detailArtwork(_ app: XCUIApplication) -> CGRect {
+        CGRect(x: 0, y: app.navigationBars.firstMatch.frame.maxY, width: app.frame.width, height: app.frame.width * 9 / 16 * 0.55)
     }
 
     fileprivate static func artworkPixelFraction(_ element: XCUIElement, fallback: Bool = false, region: CGRect? = nil) -> Double {

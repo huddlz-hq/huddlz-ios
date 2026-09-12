@@ -4,6 +4,21 @@ import Testing
 
 @MainActor
 struct DiscoveryBehaviorTests {
+    @Test("A time range crossing daylight saving time identifies both zones", arguments: [
+        ("2026-11-01T05:30:00Z", "2026-11-01T06:45:00Z", "1:30 AM EDT – 1:45 AM EST"),
+        ("2026-03-08T06:30:00Z", "2026-03-08T07:45:00Z", "1:30 AM EST – 3:45 AM EDT")
+    ])
+    func timeRangeIdentifiesBothZones(start: String, end: String, expected: String) async throws {
+        let event = HTTPFixture.coffee
+            .replacingOccurrences(of: "2026-09-10T13:00:00Z", with: start)
+            .replacingOccurrences(of: "2026-09-10T16:00:00.000000Z", with: end)
+        let client = DiscoveryClient { request in
+            HTTPFixture.response(request, body: "{\"data\":\(event)}")
+        }
+        let detail = try await client.detail(id: "coffee")
+        #expect(detail.timeRange.replacingOccurrences(of: "\u{202F}", with: " ") == expected)
+    }
+
     @Test("A late batch cannot alter a newer search or its filters", arguments: [200, 503])
     func oldPageCannotAlterANewSearch(status: Int) async {
         let pending = PendingHTTPResponse()

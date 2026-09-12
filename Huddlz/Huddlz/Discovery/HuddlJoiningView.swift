@@ -12,17 +12,17 @@ struct HuddlJoiningView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Join online").font(.title2.bold())
+            Text("Join online").font(.title3.bold())
             if let link, let user = account.user, loadedUserID == user.id {
                 Button { openURL(link) } label: {
                     Label("Join online", systemImage: "video")
-                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .frame(maxWidth: .infinity, minHeight: 32)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.glassProminent)
             } else if let user = account.user, loadedUserID == user.id, failed {
                 Text("Couldn’t load joining details.").foregroundStyle(.secondary)
                 Button("Try loading joining details again") { retry = UUID() }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.glass)
             } else if let user = account.user, loadedUserID != user.id {
                 ProgressView("Loading joining details…")
             } else if account.user != nil {
