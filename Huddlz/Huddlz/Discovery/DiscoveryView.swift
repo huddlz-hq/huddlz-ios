@@ -9,7 +9,6 @@ struct DiscoveryView: View {
     @State private var searchText = ""
     @State private var preferences = DiscoveryPreferences()
     @Environment(AccountStore.self) private var account
-    @State private var reload = UUID()
     @State private var isChoosingLocation = false
     @State private var visibleHuddlIDs: Set<Huddl.ID> = []
 
@@ -56,11 +55,7 @@ struct DiscoveryView: View {
         .background(HuddlStyle.background)
         .background { SearchBadgeLoader(store: badges, huddlIDs: visibleHuddlIDs, refresh: badgeRefresh) }
         .toolbar(horizontalSizeClass == .compact ? .hidden : .automatic, for: .navigationBar)
-        .task(id: preferences.query) { await store.search(preferences.query) }
-        .task(id: reload) {
-            // The initial request is owned by the query task.
-            if didRequestRetry { await store.search(preferences.query) }
-        }
+        .task(id: preferences.query) { await store.load(preferences.query) }
         .safeAreaInset(edge: .bottom) {
             DiscoverySearchBar(text: $searchText) { preferences.query.text = searchText }
                 .frame(height: 56)
@@ -75,8 +70,6 @@ struct DiscoveryView: View {
         await store.refresh(preferences.query)
         badgeRefresh = UUID()
     }
-
-    @State private var didRequestRetry = false
 
     private var locationFilter: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -165,7 +158,7 @@ struct DiscoveryView: View {
             } description: {
                 Text(message)
             } actions: {
-                Button("Try again") { didRequestRetry = true; reload = UUID() }
+                Button("Try again") { Task { await store.search(preferences.query) } }
                     .buttonStyle(.borderedProminent)
             }
         } else if store.huddlz.isEmpty {

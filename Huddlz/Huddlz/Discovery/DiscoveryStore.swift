@@ -15,12 +15,19 @@ final class DiscoveryStore {
 
     private let client: DiscoveryClient
     private var revision = UUID()
+    private var loadedQuery: DiscoveryQuery?
 
     init(client: DiscoveryClient? = nil) { self.client = client ?? DiscoveryClient() }
+
+    func load(_ query: DiscoveryQuery) async {
+        guard loadedQuery != query else { return }
+        await search(query)
+    }
 
     func search(_ query: DiscoveryQuery) async {
         let request = UUID()
         revision = request
+        loadedQuery = nil
         isLoading = true
         isRefreshing = false
         isLoadingMore = false
@@ -35,6 +42,7 @@ final class DiscoveryStore {
             guard request == revision, !Task.isCancelled else { return }
             huddlz = page.huddlz
             nextPage = page.next
+            loadedQuery = query
         } catch {
             guard request == revision, !Task.isCancelled else { return }
             errorMessage = error.localizedDescription

@@ -31,9 +31,9 @@ final class DiscoveryPreferences {
 
     func loadProfile(for account: AccountStore) async {
         guard !hasSelectedPlace else { return }
-        query.place = nil
-        guard let defaults = try? await account.searchDefaults(), !hasSelectedPlace else { return }
-        query.place = defaults.homeLocation?.place
-        query.distanceMiles = defaults.distanceMiles
+        let defaults = try? await account.searchDefaults()
+        guard !hasSelectedPlace, !Task.isCancelled else { return }
+        query.place = defaults?.homeLocation?.place
+        if let defaults { query.distanceMiles = defaults.distanceMiles }
     }
 }
