@@ -14,7 +14,7 @@ struct SignInPrompt: View {
             Text(description)
         } actions: {
             Button("Sign in", action: signIn)
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.glassProminent)
         }
     }
 }
@@ -34,10 +34,12 @@ struct SignedInContent<Content: View>: View {
                 content()
             } else if account.isBusy {
                 ProgressView("Checking your account…")
+                    .frame(maxWidth: .infinity, minHeight: 240)
             } else {
                 SignInPrompt(title: title, symbol: symbol, description: description) {
                     showsAccount = true
                 }
+                .frame(maxWidth: .infinity, minHeight: 240)
             }
         }
         .sheet(isPresented: $showsAccount) { AccountView() }

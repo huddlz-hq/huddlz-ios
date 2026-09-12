@@ -5,6 +5,21 @@ import Synchronization
 // Separate classes let Xcode distribute independent journeys across simulators.
 @MainActor
 final class DiscoveryUITests: DiscoveryUITestCase {
+    func testCardsShowTheDateStampEventTypeAndStartTime() {
+        let hybrid = hike.replacingOccurrences(of: "in_person", with: "hybrid")
+        let app = launch(routes: [route(body: page([coffee, hybrid]))])
+        let card = app.buttons["huddl-coffee"]
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        // The date stamp carries the month and day; the meta line carries the weekday, start time, and zone.
+        // Foundation separates the time and its period with a narrow no-break space.
+        let label = card.label.replacingOccurrences(of: "\u{202F}", with: " ")
+        XCTAssertTrue(label.contains("Sep 10"), label)
+        XCTAssertTrue(label.contains("Thu 9:00 AM EDT"), label)
+        XCTAssertTrue(label.contains("In person"), label)
+        XCTAssertTrue(label.contains("Juniper Café"), label)
+        XCTAssertTrue(app.buttons["huddl-hike"].label.contains("Hybrid"))
+    }
+
     func testOpeningAHuddlShowsItsHostingGroup() {
         let event = coffee.dropLast() + #", "relationships":{"group":{"data":{"type":"group","id":"neighbors"}}}}"#
         let detail = """
@@ -64,12 +79,10 @@ final class DiscoveryUITests: DiscoveryUITestCase {
         XCTAssertTrue(app.staticTexts["Bring a mug and meet your neighbors."].exists)
         XCTAssertTrue(app.staticTexts["Juniper Café"].exists)
         XCTAssertTrue(app.staticTexts["America/New_York"].exists)
-        let start = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Starts:")).firstMatch
-        let end = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Ends:")).firstMatch
-        XCTAssertTrue(start.label.contains("Sep 10, 2026"))
-        XCTAssertTrue(start.label.contains("9:00"))
-        XCTAssertTrue(end.label.contains("Sep 11, 2026"))
-        XCTAssertTrue(end.label.contains("12:00"))
+        // The date card names the day, then the range in the event's zone; a later end day is spelled out.
+        XCTAssertTrue(app.staticTexts["Thursday, September 10"].exists)
+        let range = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "9:00")).firstMatch
+        XCTAssertEqual(range.label.replacingOccurrences(of: "\u{202F}", with: " "), "9:00 AM – Fri, Sep 11 at 12:00 PM EDT")
         app.navigationBars.buttons.firstMatch.tap()
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 5))
         XCTAssertEqual(app.searchFields.firstMatch.value as? String, "coffee")
@@ -251,9 +264,9 @@ final class DiscoveryPagingUITests: DiscoveryUITestCase {
                           ["status": 200, "body": page([hike]), "delaySeconds": 8]]
         ]])
         XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
-        let heading = app.staticTexts["Find your people."].frame
-        // This strip above the resting heading is blank unless the native spinner appears.
-        let region = CGRect(x: app.frame.midX - 22, y: heading.minY - 22, width: 44, height: 22)
+        let wordmark = app.staticTexts["huddlz"].frame
+        // This strip above the resting wordmark row is blank unless the native spinner appears.
+        let region = CGRect(x: app.frame.midX - 22, y: wordmark.minY - 22, width: 44, height: 22)
         let captured = Mutex<Data?>(nil)
         let captureFinished = expectation(description: "Capture native refresh feedback")
         // The drag waits for native animations to finish. Capture the screen during the request.
@@ -590,15 +603,13 @@ final class DiscoveryArtworkUITests: DiscoveryUITestCase {
         let card = app.buttons["huddl-coffee"]
         XCTAssertTrue(card.waitForExistence(timeout: 5))
         let cardImage = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            Self.artworkPixelFraction(card, region: CGRect(x: 16, y: 16,
-                width: card.frame.width - 32, height: (card.frame.width - 32) * 9 / 16)) > 0.9
+            Self.artworkPixelFraction(card, region: Self.cardArtwork(card)) > 0.9
         }, object: nil)
         XCTAssertEqual(XCTWaiter.wait(for: [cardImage], timeout: 8), .completed)
         card.tap()
         XCTAssertTrue(app.staticTexts["About this huddl"].waitForExistence(timeout: 5))
         let detailImage = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            Self.artworkPixelFraction(app, region: CGRect(x: 20, y: app.navigationBars.firstMatch.frame.maxY + 20,
-                width: app.frame.width - 40, height: (app.frame.width - 40) * 9 / 16)) > 0.9
+            Self.artworkPixelFraction(app, region: Self.detailArtwork(app)) > 0.9
         }, object: nil)
         XCTAssertEqual(XCTWaiter.wait(for: [detailImage], timeout: 8), .completed)
     }
@@ -618,18 +629,15 @@ final class DiscoveryArtworkUITests: DiscoveryUITestCase {
             attachment.name = "Fallback for image response \(imageResponse)"
             attachment.lifetime = .keepAlways
             add(attachment)
-            XCTAssertGreaterThan(Self.artworkPixelFraction(card, fallback: true, region: CGRect(x: 16, y: 16, width: card.frame.width - 32, height: (card.frame.width - 32) * 9 / 16)), 0.01,
+            XCTAssertGreaterThan(Self.artworkPixelFraction(card, fallback: true, region: Self.cardArtwork(card)), 0.01,
                                  "Expected the event-type illustration for image response \(imageResponse)")
             card.tap()
             XCTAssertTrue(app.staticTexts["Bring a mug and meet your neighbors."].waitForExistence(timeout: 5))
-            let artwork = CGRect(x: 20, y: app.navigationBars.firstMatch.frame.maxY + 20,
-                                 width: app.frame.width - 40, height: (app.frame.width - 40) * 9 / 16)
-            XCTAssertGreaterThan(Self.artworkPixelFraction(app, fallback: true, region: artwork), 0.01,
+            XCTAssertGreaterThan(Self.artworkPixelFraction(app, fallback: true, region: Self.detailArtwork(app)), 0.01,
                                  "Expected fallback artwork in details for image response \(imageResponse)")
             app.navigationBars.buttons.firstMatch.tap()
             XCTAssertTrue(card.waitForExistence(timeout: 5))
-            XCTAssertGreaterThan(Self.artworkPixelFraction(card, fallback: true,
-                                 region: CGRect(x: 16, y: 16, width: card.frame.width - 32, height: (card.frame.width - 32) * 9 / 16)), 0.01)
+            XCTAssertGreaterThan(Self.artworkPixelFraction(card, fallback: true, region: Self.cardArtwork(card)), 0.01)
             app.terminate()
         }
     }
@@ -655,6 +663,16 @@ class DiscoveryUITestCase: XCTestCase {
         XCTAssertTrue(opened, "Maps did not enter the foreground (state: \(maps.state.rawValue)).", file: file, line: line)
     }
 
+    /// The card cover below its date stamp and tag, so the glass overlays cannot skew the pixel count.
+    fileprivate static func cardArtwork(_ card: XCUIElement) -> CGRect {
+        CGRect(x: 8, y: 64, width: card.frame.width - 16, height: card.frame.width * 9 / 16 - 64)
+    }
+
+    /// The upper part of the full-width detail cover, above the fade into the page background.
+    fileprivate static func detailArtwork(_ app: XCUIApplication) -> CGRect {
+        CGRect(x: 0, y: app.navigationBars.firstMatch.frame.maxY, width: app.frame.width, height: app.frame.width * 9 / 16 * 0.55)
+    }
+
     fileprivate static func artworkPixelFraction(_ element: XCUIElement, fallback: Bool = false, region: CGRect? = nil) -> Double {
         guard var source = element.screenshot().image.cgImage else { return 0 }
         if let region {
@@ -674,7 +692,8 @@ class DiscoveryUITestCase: XCTestCase {
             let data = bytes.bindMemory(to: UInt8.self)
             return stride(from: 0, to: data.count, by: 4).filter {
                 if fallback {
-                    return data[$0] > 100 && data[$0 + 2] > 80 && Double(data[$0 + 1]) < Double(data[$0]) * 0.8
+                    // The event-type symbol is drawn in the teal accent in both appearances.
+                    return data[$0] < 90 && data[$0 + 1] > 100 && data[$0 + 2] > 100 && data[$0 + 1] > data[$0] * 2
                 }
                 return data[$0] < 50 && data[$0 + 1] > 200 && data[$0 + 2] < 50
             }.count
