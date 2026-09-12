@@ -23,10 +23,11 @@ struct AgendaEntry: Identifiable, Hashable, Sendable, Decodable {
 
 struct AgendaDay: Identifiable, Equatable {
     let id: String
+    let dateKey: String
     let title: String
     let entries: [AgendaEntry]
 
-    /// Groups entries soonest first by calendar day in each huddl's own time zone.
+    /// Groups adjacent entries by local day, preserving soonest-first order across time zones.
     static func days(for entries: [AgendaEntry]) -> [AgendaDay] {
         let sorted = entries.sorted { $0.huddl.attributes.startsAt < $1.huddl.attributes.startsAt }
         var days: [AgendaDay] = []
@@ -35,14 +36,14 @@ struct AgendaDay: Identifiable, Equatable {
             let key = DateFormatter()
             key.timeZone = zone
             key.dateFormat = "yyyy-MM-dd"
-            let id = key.string(from: entry.huddl.attributes.startsAt)
-            if let index = days.firstIndex(where: { $0.id == id }) {
-                days[index] = AgendaDay(id: id, title: days[index].title, entries: days[index].entries + [entry])
+            let dateKey = key.string(from: entry.huddl.attributes.startsAt)
+            if let last = days.last, last.dateKey == dateKey {
+                days[days.count - 1] = AgendaDay(id: last.id, dateKey: dateKey, title: last.title, entries: last.entries + [entry])
             } else {
                 let title = DateFormatter()
                 title.timeZone = zone
                 title.setLocalizedDateFormatFromTemplate("EEEEMMMMd")
-                days.append(AgendaDay(id: id, title: title.string(from: entry.huddl.attributes.startsAt), entries: [entry]))
+                days.append(AgendaDay(id: entry.id, dateKey: dateKey, title: title.string(from: entry.huddl.attributes.startsAt), entries: [entry]))
             }
         }
         return days

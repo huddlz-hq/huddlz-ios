@@ -100,7 +100,7 @@ final class AgendaTabUITests: XCTestCase {
         """
         {"type":"huddl","id":"coffee","attributes":{
           "title":"Coffee with neighbors","description":"Bring a mug and meet your neighbors.",
-          "starts_at":"2026-09-14T13:00:00Z","ends_at":"2026-09-14T15:00:00Z",
+          "starts_at":"2099-09-14T13:00:00Z","ends_at":"2099-09-14T15:00:00Z",
           "time_zone":"America/New_York","event_type":"in_person",
           "physical_location":"Juniper Café","thumbnail_url":null,"lifecycle_state":"published",
           "attendance_state":"confirmed"
@@ -112,7 +112,7 @@ final class AgendaTabUITests: XCTestCase {
         """
         {"type":"huddl","id":"hike","attributes":{
           "title":"Riverside hike","description":"Bring water.",
-          "starts_at":"2026-09-15T23:00:00Z","ends_at":"2026-09-16T01:00:00Z",
+          "starts_at":"2099-09-15T23:00:00Z","ends_at":"2099-09-16T01:00:00Z",
           "time_zone":"America/New_York","event_type":"in_person",
           "physical_location":"Riverside Park","thumbnail_url":null,"lifecycle_state":"published",
           "attendance_state":"waitlisted"
