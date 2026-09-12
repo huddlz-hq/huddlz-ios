@@ -21,6 +21,7 @@ final class AgendaTabUITests: XCTestCase {
         XCTAssertTrue(hikeRow.label.contains("Waitlisted"))
         XCTAssertTrue(app.staticTexts["Monday, September 14"].exists)
         XCTAssertTrue(app.staticTexts["Tuesday, September 15"].exists)
+        XCTAssertTrue(app.staticTexts["Two huddlz coming up."].exists)
         // Soonest first, whatever order the API used.
         XCTAssertLessThan(coffeeRow.frame.minY, hikeRow.frame.minY)
 
@@ -29,6 +30,15 @@ final class AgendaTabUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["You’re going"].waitForExistence(timeout: 5))
         app.navigationBars.buttons.firstMatch.tap()
         XCTAssertTrue(hikeRow.waitForExistence(timeout: 5))
+    }
+
+    func testAgendaHeaderOpensTheAccountSheet() {
+        let app = launch(agendaResponses: [["status": 200, "body": page([coffee])]])
+        openAgenda(app)
+        XCTAssertTrue(app.buttons["agenda-coffee"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["One huddl coming up."].exists)
+        app.buttons["Account"].tap()
+        XCTAssertTrue(app.staticTexts["Our Neighbor"].waitForExistence(timeout: 5))
     }
 
     func testEmptyAgendaPointsToDiscover() {

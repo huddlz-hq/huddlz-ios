@@ -29,18 +29,7 @@ struct DiscoveryView: View {
     private var discoveryContent: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
-                HStack {
-                    wordmark
-                    Spacer(minLength: 8)
-                    Button { isShowingAccount = true } label: {
-                        Image(systemName: "person.crop.circle")
-                            .font(.title3)
-                            .frame(width: 28, height: 28)
-                    }
-                    .buttonStyle(.glass)
-                    .buttonBorderShape(.circle)
-                    .accessibilityLabel("Account")
-                }
+                BrandHeader { isShowingAccount = true }
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Find your people.")
                         .font(.system(.largeTitle, design: .rounded, weight: .bold))
@@ -70,20 +59,6 @@ struct DiscoveryView: View {
     private func refresh() async {
         await store.refresh(preferences.query)
         badgeRefresh = UUID()
-    }
-
-    private var wordmark: some View {
-        HStack(spacing: 10) {
-            Text("h")
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(Color(uiColor: .systemBackground))
-                .frame(width: 28, height: 28)
-                .background(HuddlStyle.accent, in: .rect(cornerRadius: 8))
-                .accessibilityHidden(true)
-            Text("huddlz")
-                .font(.system(size: 16, weight: .heavy))
-                .tracking(-0.5)
-        }
     }
 
     // Filters are glass chips; a chosen location keeps the accent so the active filter stands out.

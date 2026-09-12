@@ -70,6 +70,11 @@ struct Huddl: Identifiable, Decodable, Hashable, Sendable {
         attributes.startsAt.formatted(zoned.weekday(.abbreviated).hour().minute())
     }
 
+    /// The start time alone in the huddl's zone, such as "9:00 AM", for rows already under a day heading.
+    var startClock: String {
+        attributes.startsAt.formatted(zoned.hour().minute())
+    }
+
     /// The start day in the huddl's zone, such as "Thursday, September 10".
     var dayTitle: String {
         attributes.startsAt.formatted(zoned.weekday(.wide).month(.wide).day())
@@ -77,7 +82,7 @@ struct Huddl: Identifiable, Decodable, Hashable, Sendable {
 
     /// The start and end times in the huddl's zone; an end on a later day names that day.
     var timeRange: String {
-        let start = attributes.startsAt.formatted(zoned.hour().minute())
+        let start = startClock
         let sameDay = dayKey(attributes.startsAt) == dayKey(attributes.endsAt)
         let end = sameDay
             ? attributes.endsAt.formatted(zoned.hour().minute())
