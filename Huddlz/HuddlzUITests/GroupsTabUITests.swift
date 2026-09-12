@@ -85,6 +85,9 @@ final class GroupsTabUITests: XCTestCase {
     }
 
     private func openGroups(_ app: XCUIApplication) {
+        // While Discover is selected the other tabs fold into one pill; Agenda opens them.
+        XCTAssertTrue(app.tabBars.buttons["Agenda"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["Agenda"].tap()
         XCTAssertTrue(app.tabBars.buttons["Groups"].waitForExistence(timeout: 5))
         app.tabBars.buttons["Groups"].tap()
     }

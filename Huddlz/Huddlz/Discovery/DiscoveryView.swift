@@ -56,12 +56,10 @@ struct DiscoveryView: View {
         .background { SearchBadgeLoader(store: badges, huddlIDs: visibleHuddlIDs, refresh: badgeRefresh) }
         .toolbar(horizontalSizeClass == .compact ? .hidden : .automatic, for: .navigationBar)
         .task(id: preferences.query) { await store.load(preferences.query) }
-        .safeAreaInset(edge: .bottom) {
-            DiscoverySearchBar(text: $searchText) { preferences.query.text = searchText }
-                .frame(height: 56)
-                .padding(.horizontal, 12)
-                .padding(.bottom, 8)
-        }
+        // The search-role tab shows this field in the tab bar and expands it when tapped.
+        .searchable(text: $searchText, prompt: "Search huddlz")
+        .searchToolbarBehavior(.minimize)
+        .onSubmit(of: .search) { preferences.query.text = searchText }
         .refreshable { await refresh() }
         .navigationDestination(for: Huddl.ID.self) { HuddlDetailView(id: $0) }
     }

@@ -117,3 +117,21 @@ struct DiscoveryPlace: Equatable, Hashable, Sendable {
     let longitude: Double
     let timeZone: String?
 }
+
+extension JSONDecoder {
+    /// Decodes API huddl documents: snake_case keys and ISO 8601 dates with or without fractions.
+    static var huddlz: JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let text = try decoder.singleValueContainer().decode(String.self)
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = formatter.date(from: text) { return date }
+            formatter.formatOptions = [.withInternetDateTime]
+            if let date = formatter.date(from: text) { return date }
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Invalid event date"))
+        }
+        return decoder
+    }
+}

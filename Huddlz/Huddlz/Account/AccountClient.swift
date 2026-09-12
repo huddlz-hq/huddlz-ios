@@ -284,6 +284,18 @@ struct AccountClient {
         return states
     }
 
+    /// Upcoming huddlz the member is going to or waitlisted for, soonest first.
+    func agenda(token: String) async throws -> [AgendaEntry] {
+        var components = URLComponents(string: "https://huddlz.com/api/json/huddlz/upcoming")!
+        components.queryItems = ["confirmed", "waitlisted"].map { URLQueryItem(name: "filter[attendance_state][in][]", value: $0) }
+        var request = URLRequest(url: components.url!)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/vnd.api+json", forHTTPHeaderField: "Accept")
+        let data = try await send(request)
+        struct Document: Decodable { let data: [AgendaEntry] }
+        return try JSONDecoder.huddlz.decode(Document.self, from: data).data.filter { $0.attendance != .none }
+    }
+
     func groups(token: String) async throws -> GroupsPage {
         var components = URLComponents(url: Self.groupsURL, resolvingAgainstBaseURL: false)!
         components.queryItems = [URLQueryItem(name: "page[limit]", value: "20")]
