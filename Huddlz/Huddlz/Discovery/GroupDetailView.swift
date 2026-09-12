@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct HostingGroup: Decodable {
+struct HostingGroup: Decodable, Identifiable {
     let id: String
     let attributes: Attributes
 

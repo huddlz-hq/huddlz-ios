@@ -130,6 +130,23 @@ final class AccountStore {
         return states
     }
 
+    func groups() async throws -> GroupsPage {
+        try await forCurrentUser { token in try await client.groups(token: token) }
+    }
+
+    func groupsPage(at url: URL) async throws -> GroupsPage {
+        try await forCurrentUser { token in try await client.groupsPage(at: url, token: token) }
+    }
+
+    /// Runs an authenticated request and discards its result if the account changed meanwhile.
+    private func forCurrentUser<Value>(_ request: (String) async throws -> Value) async throws -> Value {
+        guard let userID = user?.id, let token = try await tokens.load() else { throw AccountError.unauthorized }
+        let value = try await request(token)
+        guard user?.id == userID else { throw CancellationError() }
+        try Task.checkCancellation()
+        return value
+    }
+
     func saveHomeLocation(_ place: DiscoveryPlace) async throws {
         guard !isBusy, let user else { throw AccountError.unavailable }
         isBusy = true

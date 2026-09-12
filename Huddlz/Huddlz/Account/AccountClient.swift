@@ -284,6 +284,32 @@ struct AccountClient {
         return states
     }
 
+    func groups(token: String) async throws -> GroupsPage {
+        var components = URLComponents(url: Self.groupsURL, resolvingAgainstBaseURL: false)!
+        components.queryItems = [URLQueryItem(name: "page[limit]", value: "20")]
+        return try await groupsPage(at: components.url!, token: token)
+    }
+
+    /// Follows only the API's own next link for the member's groups, never another route or host.
+    func groupsPage(at url: URL, token: String) async throws -> GroupsPage {
+        let base = Self.groupsURL
+        guard url.scheme == base.scheme, url.host == base.host, url.port == base.port,
+              url.path == base.path, url.user == nil, url.password == nil else { throw AccountError.unavailable }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let data = try await send(request)
+        struct Document: Decodable {
+            let data: [HostingGroup]
+            let links: Links?
+            struct Links: Decodable { let next: URL? }
+        }
+        let document = try JSONDecoder().decode(Document.self, from: data)
+        return GroupsPage(groups: document.data, next: document.links?.next)
+    }
+
+    private static let groupsURL = URL(string: "https://huddlz.com/api/json/groups/mine")!
+
     func signOut(token: String) async throws {
         var request = URLRequest(url: URL(string: "https://huddlz.com/api/auth/sign_out")!)
         request.httpMethod = "DELETE"
@@ -316,6 +342,11 @@ struct AccountClient {
         default: throw AccountError.unavailable
         }
     }
+}
+
+struct GroupsPage {
+    let groups: [HostingGroup]
+    let next: URL?
 }
 
 enum AccountError: Error {
