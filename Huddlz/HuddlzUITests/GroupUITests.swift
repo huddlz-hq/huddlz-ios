@@ -19,6 +19,12 @@ final class GroupUITests: XCTestCase {
         let card = app.buttons["huddl-walk"]
         for _ in 0..<3 where !card.isHittable { app.swipeUp() }
         XCTAssertTrue(card.exists)
+        // The group's cards share Discover's anatomy: date stamp, type tag, weekday and start time.
+        let label = card.label.replacingOccurrences(of: "\u{202F}", with: " ")
+        XCTAssertTrue(label.contains("River walk"), label)
+        XCTAssertTrue(label.contains("Sep 11"), label)
+        XCTAssertTrue(label.contains("Fri 8:00 AM CDT"), label)
+        XCTAssertTrue(label.contains("Online"), label)
         card.tap()
         XCTAssertTrue(app.staticTexts["A walk by the river."].waitForExistence(timeout: 5))
         app.navigationBars.buttons.firstMatch.tap()

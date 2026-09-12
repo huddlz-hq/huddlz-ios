@@ -1,6 +1,7 @@
 import SwiftUI
 
-struct DiscoveryHuddlCard: View {
+/// The huddl card shared by Discover and group pages: a cover with the date stamp and tag, then host, title, and meta.
+struct HuddlCard: View {
     let huddl: Huddl
     var attendance: AttendanceState? = nil
 

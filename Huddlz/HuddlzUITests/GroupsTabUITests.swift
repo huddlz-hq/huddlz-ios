@@ -24,6 +24,15 @@ final class GroupsTabUITests: XCTestCase {
         XCTAssertTrue(app.buttons["group-runners"].waitForExistence(timeout: 5))
     }
 
+    func testGroupsHeaderOpensTheAccountSheet() {
+        let app = launch(groupsResponses: [["status": 200, "body": page([neighbors])]])
+        openGroups(app)
+        XCTAssertTrue(app.buttons["group-neighbors"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["The people you keep showing up for."].exists)
+        app.buttons["Account"].tap()
+        XCTAssertTrue(app.staticTexts["Our Neighbor"].waitForExistence(timeout: 5))
+    }
+
     func testNoGroupsExplainsHowToJoinOne() {
         let app = launch(groupsResponses: [["status": 200, "body": page([])]])
         openGroups(app)
