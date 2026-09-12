@@ -8,14 +8,25 @@ final class TabsUITests: XCTestCase {
         XCUIDevice.shared.orientation = .portrait
     }
 
-    func testLaunchingShowsDiscoverWithAgendaAndGroupsTabs() {
+    func testLaunchingShowsDiscoverWithItsSearchFieldAndACollapsedTabPill() {
         let app = launch()
         XCTAssertTrue(app.staticTexts["Find your people."].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
+        // The search tab is selected: its field is expanded and the other tabs fold into one pill.
+        XCTAssertTrue(app.searchFields["Search huddlz"].exists)
         XCTAssertTrue(app.tabBars.buttons["Agenda"].exists)
+        XCTAssertFalse(app.tabBars.buttons["Groups"].exists)
+
+        app.tabBars.buttons["Agenda"].tap()
+        XCTAssertTrue(app.staticTexts["Sign in to see your agenda"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.tabBars.buttons["Agenda"].isSelected)
         XCTAssertTrue(app.tabBars.buttons["Groups"].exists)
         XCTAssertTrue(app.tabBars.buttons["Discover"].exists)
-        XCTAssertTrue(app.tabBars.buttons["Discover"].isSelected)
+        XCTAssertFalse(app.searchFields["Search huddlz"].exists)
+
+        app.tabBars.buttons["Discover"].tap()
+        XCTAssertTrue(app.staticTexts["Find your people."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.searchFields["Search huddlz"].waitForExistence(timeout: 5))
     }
 
     func testAgendaAndGroupsAskSignedOutVisitorsToSignIn() {
@@ -71,6 +82,8 @@ final class TabsUITests: XCTestCase {
 
     func testRotatingKeepsTheSelectedTab() {
         let app = launch()
+        XCTAssertTrue(app.tabBars.buttons["Agenda"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["Agenda"].tap()
         XCTAssertTrue(app.tabBars.buttons["Groups"].waitForExistence(timeout: 5))
         app.tabBars.buttons["Groups"].tap()
         XCTAssertTrue(app.staticTexts["Sign in to see your groups"].waitForExistence(timeout: 5))
