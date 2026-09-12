@@ -36,7 +36,7 @@ struct SearchBadgeCard: View {
     @Environment(AccountStore.self) private var account
 
     var body: some View {
-        HuddlCard(huddl: huddl, attendance: store.attendance(for: huddl.id, userID: account.user?.id))
+        DiscoveryHuddlCard(huddl: huddl, attendance: store.attendance(for: huddl.id, userID: account.user?.id))
     }
 }
 

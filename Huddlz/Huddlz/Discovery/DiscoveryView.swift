@@ -29,20 +29,23 @@ struct DiscoveryView: View {
     private var discoveryContent: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Find your people.")
-                            .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                        Text("Find a huddl worth showing up to.")
-                            .foregroundStyle(.secondary)
-                    }
+                HStack {
+                    wordmark
                     Spacer(minLength: 8)
                     Button { isShowingAccount = true } label: {
                         Image(systemName: "person.crop.circle")
-                            .font(.title2)
-                            .frame(width: 44, height: 44)
+                            .font(.title3)
+                            .frame(width: 28, height: 28)
                     }
+                    .buttonStyle(.glass)
+                    .buttonBorderShape(.circle)
                     .accessibilityLabel("Account")
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Find your people.")
+                        .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                    Text("Find a huddl worth showing up to.")
+                        .foregroundStyle(.secondary)
                 }
                 locationFilter
                 filters
@@ -52,7 +55,7 @@ struct DiscoveryView: View {
             .frame(maxWidth: 640)
             .frame(maxWidth: .infinity)
         }
-        .background(HuddlStyle.background)
+        .background { AmbientBackground() }
         .background { SearchBadgeLoader(store: badges, huddlIDs: visibleHuddlIDs, refresh: badgeRefresh) }
         .toolbar(horizontalSizeClass == .compact ? .hidden : .automatic, for: .navigationBar)
         .task(id: preferences.query) { await store.load(preferences.query) }
@@ -69,6 +72,21 @@ struct DiscoveryView: View {
         badgeRefresh = UUID()
     }
 
+    private var wordmark: some View {
+        HStack(spacing: 10) {
+            Text("h")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(Color(uiColor: .systemBackground))
+                .frame(width: 28, height: 28)
+                .background(HuddlStyle.accent, in: .rect(cornerRadius: 8))
+                .accessibilityHidden(true)
+            Text("huddlz")
+                .font(.system(size: 16, weight: .heavy))
+                .tracking(-0.5)
+        }
+    }
+
+    // Filters are glass chips; a chosen location keeps the accent so the active filter stands out.
     private var locationFilter: some View {
         VStack(alignment: .leading, spacing: 8) {
             Button { isChoosingLocation = true } label: {
@@ -76,33 +94,38 @@ struct DiscoveryView: View {
                     .multilineTextAlignment(.leading)
                     .frame(minHeight: 32)
             }
+            .foregroundStyle(preferences.query.place == nil ? Color.primary : HuddlStyle.accent)
             .accessibilityLabel("Location: \(preferences.query.place?.name ?? "Anywhere")")
             if preferences.query.place != nil {
-                HStack {
-                    Menu {
-                        Picker("Distance", selection: $preferences.query.distanceMiles) {
-                            ForEach([5, 10, 25, 50, 100], id: \.self) { miles in
-                                Text("\(miles) miles").tag(miles)
+                GlassEffectContainer(spacing: 8) {
+                    HStack(spacing: 8) {
+                        Menu {
+                            Picker("Distance", selection: $preferences.query.distanceMiles) {
+                                ForEach([5, 10, 25, 50, 100], id: \.self) { miles in
+                                    Text("\(miles) miles").tag(miles)
+                                }
                             }
+                        } label: {
+                            Text("Within \(preferences.query.distanceMiles) miles").frame(minHeight: 32)
                         }
-                    } label: {
-                        Text("Within \(preferences.query.distanceMiles) miles").frame(minHeight: 32)
+                        .accessibilityLabel("Distance: \(preferences.query.distanceMiles) miles")
+                        Button("Clear location") { preferences.selectPlace(nil) }
+                            .frame(minHeight: 32)
                     }
-                    .accessibilityLabel("Distance: \(preferences.query.distanceMiles) miles")
-                    Button("Clear location") { preferences.selectPlace(nil) }
-                        .frame(minHeight: 32)
                 }
             }
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.glass)
     }
 
     private var filters: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack { dateFilter; typeFilter }
-            VStack(alignment: .leading) { dateFilter; typeFilter }
+        GlassEffectContainer(spacing: 8) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) { dateFilter; typeFilter }
+                VStack(alignment: .leading, spacing: 8) { dateFilter; typeFilter }
+            }
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.glass)
     }
 
     private var dateFilter: some View {
@@ -114,6 +137,7 @@ struct DiscoveryView: View {
             Label(preferences.query.dates.title, systemImage: "calendar")
                 .frame(minHeight: 32)
         }
+        .foregroundStyle(preferences.query.dates == .upcoming ? Color.primary : HuddlStyle.accent)
         .accessibilityLabel("When: \(preferences.query.dates.title)")
     }
 
@@ -127,6 +151,7 @@ struct DiscoveryView: View {
             Label(preferences.query.eventType?.title ?? "All types", systemImage: "person.2")
                 .frame(minHeight: 32)
         }
+        .foregroundStyle(preferences.query.eventType == nil ? Color.primary : HuddlStyle.accent)
         .accessibilityLabel("Event type: \(preferences.query.eventType?.title ?? "All types")")
     }
 
@@ -141,7 +166,7 @@ struct DiscoveryView: View {
                     Button("Try refreshing again") {
                         Task { await refresh() }
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.glass)
                 }
             }
             .frame(maxWidth: .infinity)
@@ -157,7 +182,7 @@ struct DiscoveryView: View {
                 Text(message)
             } actions: {
                 Button("Try again") { Task { await store.search(preferences.query) } }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.glassProminent)
             }
         } else if store.huddlz.isEmpty {
             ContentUnavailableView {
@@ -169,6 +194,7 @@ struct DiscoveryView: View {
             } actions: {
                 if preferences.query != DiscoveryQuery() {
                     Button("Clear search and filters") { searchText = ""; preferences.selectPlace(nil); preferences.query = DiscoveryQuery() }
+                        .buttonStyle(.glass)
                 }
             }
         } else {
@@ -218,7 +244,7 @@ private struct DiscoveryPaginationFooter: View {
                         Button("Try loading more again") {
                             Task { await store.loadMore() }
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.glass)
                         .disabled(store.isRefreshing)
                     } else {
                         Color.clear.accessibilityHidden(true)
