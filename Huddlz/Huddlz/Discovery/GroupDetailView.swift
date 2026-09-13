@@ -28,20 +28,33 @@ struct GroupDetailView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
                 if let group {
-                    Text(group.attributes.name)
-                        .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                    if let location = group.attributes.location, !location.isEmpty {
-                        Label(location, systemImage: "mappin.and.ellipse").foregroundStyle(.secondary)
+                    HStack(spacing: 14) {
+                        GroupTile(name: group.attributes.name, size: 64)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(group.attributes.name)
+                                .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                            if let location = group.attributes.location, !location.isEmpty {
+                                Label(location, systemImage: "mappin.and.ellipse")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
                     }
-                    Text(group.attributes.description ?? "The group hasn’t added a description yet.")
-                        .textSelection(.enabled)
-                    Text("Upcoming huddlz").font(.title2.bold())
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("About this group").font(.title3.bold())
+                        Text(group.attributes.description ?? "The group hasn’t added a description yet.")
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
+                    Text("Upcoming huddlz").font(.title3.bold())
                     if let huddlzError {
-                        Text("Couldn’t load upcoming huddlz.").font(.headline)
-                        Text(huddlzError).foregroundStyle(.secondary)
-                        Button("Try loading huddlz again") { reload = UUID() }.buttonStyle(.bordered)
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Couldn’t load upcoming huddlz.").font(.headline)
+                            Text(huddlzError).foregroundStyle(.secondary)
+                            Button("Try loading huddlz again") { reload = UUID() }.buttonStyle(.glass)
+                        }
                     } else if !hasLoadedHuddlz {
-                        ProgressView("Loading huddlz…")
+                        ProgressView("Loading huddlz…").frame(maxWidth: .infinity, minHeight: 120)
                     } else if huddlz.isEmpty {
                         ContentUnavailableView("No upcoming huddlz", systemImage: "calendar",
                                                description: Text("Check back for the group’s next gathering."))
@@ -57,7 +70,7 @@ struct GroupDetailView: View {
                         } else {
                             if moreError { Text("Couldn’t load more huddlz.").foregroundStyle(.secondary) }
                             Button(moreError ? "Try loading more again" : "Load more huddlz") { moreRequest = UUID() }
-                                .buttonStyle(.bordered)
+                                .buttonStyle(.glass)
                                 .frame(maxWidth: .infinity)
                         }
                     }
@@ -67,7 +80,7 @@ struct GroupDetailView: View {
                     } description: {
                         Text(errorMessage)
                     } actions: {
-                        Button("Try again") { reload = UUID() }.buttonStyle(.borderedProminent)
+                        Button("Try again") { reload = UUID() }.buttonStyle(.glassProminent)
                     }
                 } else {
                     ProgressView("Loading group…").frame(maxWidth: .infinity, minHeight: 180)
@@ -77,7 +90,7 @@ struct GroupDetailView: View {
             .frame(maxWidth: 640, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
-        .background(HuddlStyle.background)
+        .background { AmbientBackground() }
         .navigationTitle("The group")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)

@@ -161,6 +161,25 @@ struct BrandHeader: View {
     }
 }
 
+/// A square tile with the group's initial in the accent, standing in for group artwork.
+struct GroupTile: View {
+    let name: String
+    var size: CGFloat = 48
+
+    var body: some View {
+        Text(initial)
+            .font(.system(size: size * 0.42, weight: .heavy, design: .rounded))
+            .foregroundStyle(HuddlStyle.accent)
+            .frame(width: size, height: size)
+            .background(HuddlStyle.accent.opacity(0.12), in: .rect(cornerRadius: size * 0.29))
+            .accessibilityHidden(true)
+    }
+
+    private var initial: String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines).first.map { String($0).uppercased() } ?? "h"
+    }
+}
+
 /// The rounded surface card used for grouped rows on detail pages.
 struct SurfaceCard: ViewModifier {
     func body(content: Content) -> some View {
@@ -173,39 +192,4 @@ struct SurfaceCard: ViewModifier {
 
 extension View {
     func surfaceCard() -> some View { modifier(SurfaceCard()) }
-}
-
-struct HuddlCard: View {
-    let huddl: Huddl
-    var attendance: AttendanceState? = nil
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            ZStack(alignment: .topTrailing) {
-                HuddlArtwork(huddl: huddl)
-                if attendance == .confirmed || attendance == .waitlisted {
-                    Label(attendance == .confirmed ? "Going" : "Waitlisted",
-                          systemImage: attendance == .confirmed ? "checkmark.circle.fill" : "clock")
-                        .font(.caption.bold())
-                        .foregroundStyle(HuddlStyle.accent)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .background(.regularMaterial, in: Capsule())
-                        .padding(12)
-                }
-            }
-            Text(huddl.attributes.eventType.title)
-                .font(.caption.bold())
-                .foregroundStyle(HuddlStyle.accent)
-            Text(huddl.title)
-                .font(.system(.title2, design: .rounded, weight: .bold))
-            Label("\(huddl.schedule) \(huddl.timeZoneLabel)", systemImage: "calendar")
-            Label(huddl.location, systemImage: "mappin.and.ellipse")
-                .foregroundStyle(.secondary)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(HuddlStyle.surface, in: .rect(cornerRadius: 28))
-        .accessibilityElement(children: .combine)
-    }
 }

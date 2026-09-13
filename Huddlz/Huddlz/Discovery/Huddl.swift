@@ -48,17 +48,6 @@ struct Huddl: Identifiable, Decodable, Hashable, Sendable {
         return attributes.eventType == .virtual ? "Online" : "Location to be announced"
     }
 
-    var schedule: String { formattedDate(attributes.startsAt) }
-    var endSchedule: String { formattedDate(attributes.endsAt) }
-
-    private func formattedDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.timeZone = TimeZone(identifier: attributes.timeZone) ?? .gmt
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
-    }
-
     var timeZone: TimeZone { TimeZone(identifier: attributes.timeZone) ?? .gmt }
 
     var timeZoneLabel: String {
