@@ -46,6 +46,8 @@ final class AccountUITests: XCTestCase {
     func testShowingAndHidingPasswordPreservesEntryAndCanSignIn() {
         let app = launch()
         app.buttons["Account"].tap()
+        XCTAssertTrue(app.staticTexts["Welcome back"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Sign in to huddlz"].exists)
         app.textFields["Email"].tap()
         app.textFields["Email"].typeText("neighbor@example.com")
         app.secureTextFields["Password"].tap()
@@ -72,6 +74,7 @@ final class AccountUITests: XCTestCase {
         app.buttons["Account"].tap()
         XCTAssertTrue(app.staticTexts["Our Neighbor"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["neighbor@example.com"].exists)
+        XCTAssertTrue(app.staticTexts["You’re signed in."].exists)
         signOut(app)
     }
 

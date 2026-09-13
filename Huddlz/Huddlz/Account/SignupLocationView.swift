@@ -33,7 +33,7 @@ struct SignupLocationView: View {
                     }
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(HuddlStyle.surface, in: .rect(cornerRadius: 16))
+                    .surfaceCard()
                     if saveFailed {
                         Text("Couldn’t save your city. Try again, or do this later.")
                             .foregroundStyle(.secondary)
@@ -53,17 +53,18 @@ struct SignupLocationView: View {
                     } label: {
                         Text(saveFailed ? "Retry" : "Save home city")
                             .font(.headline)
-                            .frame(maxWidth: .infinity, minHeight: 52)
+                            .frame(maxWidth: .infinity, minHeight: 36)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.glassProminent)
                 }
                 Button {
                     cancelLookup()
                     isChoosingCity = true
                 } label: {
                     Label("Choose a city", systemImage: "magnifyingglass")
-                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .frame(maxWidth: .infinity, minHeight: 36)
                 }
+                .buttonStyle(.glass)
                 Button {
                     lookupError = nil
                     isDetecting = true
@@ -74,8 +75,9 @@ struct SignupLocationView: View {
                     }
                 } label: {
                     Label("Use current location", systemImage: "location.fill")
-                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .frame(maxWidth: .infinity, minHeight: 36)
                 }
+                .buttonStyle(.glass)
                 .disabled(isDetecting)
                 if isDetecting { ProgressView("Finding your city…") }
                 if let message = lookupError {
@@ -83,12 +85,13 @@ struct SignupLocationView: View {
                 }
                 if isSaving { ProgressView("Saving your city…") }
                 Button { cancelLookup(); onFinish(nil) } label: {
-                    Text("Not now").frame(maxWidth: .infinity, minHeight: 44)
+                    Text("Not now").sheetLink()
                 }
             }
             .padding(24)
             .disabled(isSaving)
         }
+        .presentationBackground(.regularMaterial)
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .interactiveDismissDisabled(isSaving)

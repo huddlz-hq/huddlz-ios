@@ -12,19 +12,18 @@ struct PasswordResetView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                Text(didRequestReset ? "Check your email" : "Reset your password")
-                    .font(.largeTitle.bold())
-                    .accessibilityAddTraits(.isHeader)
+            VStack(alignment: .leading, spacing: 22) {
+                SheetHeader(title: didRequestReset ? "Check your email" : "Reset your password",
+                            subtitle: didRequestReset
+                                ? "If an account exists for this email, we’ll send a reset link."
+                                : "Enter your account email to request a reset link.") {
+                    EmptyView()
+                }
                 if didRequestReset {
-                    Text("If an account exists for this email, we’ll send a reset link.")
                     Text("Follow the link to choose a new password on huddlz.com, then return here to sign in.")
                         .foregroundStyle(.secondary)
                 } else {
-                    Text("Enter your account email to request a reset link.")
-                        .foregroundStyle(.secondary)
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Email").font(.subheadline)
+                    FormField("Email") {
                         TextField("Email", text: $email)
                             .textContentType(.username)
                             .keyboardType(.emailAddress)
@@ -33,27 +32,21 @@ struct PasswordResetView: View {
                             .focused($isEmailFocused)
                             .submitLabel(.send)
                             .onSubmit { send() }
-                            .padding(16)
-                            .background(HuddlStyle.surface, in: .rect(cornerRadius: 14))
+                            .formFieldWell()
                             .disabled(isSending)
                     }
                     Button(action: send) {
                         Text("Send reset link")
                             .font(.headline)
-                            .frame(maxWidth: .infinity, minHeight: 52)
-                            .foregroundStyle(.white)
-                            .background(HuddlStyle.accent.opacity(canSend ? 1 : 0.35), in: .rect(cornerRadius: 16))
-                            .contentShape(.rect)
+                            .frame(maxWidth: .infinity, minHeight: 36)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.glassProminent)
                     .disabled(!canSend)
                     if isSending { ProgressView("Sending…") }
                     if let errorMessage { Text(errorMessage).foregroundStyle(.secondary) }
                 }
                 Button { dismiss() } label: {
-                    Text("Back to sign in")
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .contentShape(.rect)
+                    Text("Back to sign in").sheetLink()
                 }
                 .disabled(isSending)
             }
@@ -63,6 +56,7 @@ struct PasswordResetView: View {
             .frame(maxWidth: .infinity)
         }
         .scrollBounceBehavior(.basedOnSize)
+        // Opaque: this sheet stacks on the account sheet, whose fields must not show (or read) through it.
         .background(HuddlStyle.background)
         .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.height(440), .large])
         .presentationDragIndicator(.visible)
