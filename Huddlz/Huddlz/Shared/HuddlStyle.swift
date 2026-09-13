@@ -193,3 +193,71 @@ struct SurfaceCard: ViewModifier {
 extension View {
     func surfaceCard() -> some View { modifier(SurfaceCard()) }
 }
+
+/// A sheet's title and subtitle with a trailing control, as on the canvas's account sheet.
+struct SheetHeader<Trailing: View>: View {
+    let title: String
+    let subtitle: String
+    @ViewBuilder let trailing: () -> Trailing
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(.title, design: .rounded, weight: .bold))
+                    .accessibilityAddTraits(.isHeader)
+                Text(subtitle).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            trailing()
+        }
+    }
+}
+
+/// A form field's label above its content.
+struct FormField<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: () -> Content
+
+    init(_ title: String, @ViewBuilder content: @escaping () -> Content) {
+        self.title = title
+        self.content = content
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.leading, 4)
+            content()
+        }
+    }
+}
+
+/// The 52-point well a text field sits in: a surface with a hairline ring.
+struct FormFieldWell: ViewModifier {
+    var trailingInset: CGFloat = 16
+
+    func body(content: Content) -> some View {
+        content
+            .padding(.leading, 16)
+            .padding(.trailing, trailingInset)
+            .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+            .background(HuddlStyle.surface, in: .rect(cornerRadius: 14))
+            .overlay { RoundedRectangle(cornerRadius: 14).strokeBorder(.quaternary) }
+    }
+}
+
+extension View {
+    func formFieldWell(trailingInset: CGFloat = 16) -> some View { modifier(FormFieldWell(trailingInset: trailingInset)) }
+}
+
+extension Text {
+    /// A full-width, 44-point secondary action in a sheet, such as "Forgot password?".
+    func sheetLink() -> some View {
+        font(.subheadline.weight(.semibold))
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .contentShape(.rect)
+    }
+}

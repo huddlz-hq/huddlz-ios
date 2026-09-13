@@ -15,41 +15,47 @@ struct RegistrationForm: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text("Find your people. Join a huddl.").foregroundStyle(.secondary)
-            field("Display name") {
-                TextField("Display name", text: $displayName)
-                    .textContentType(.nickname)
-                    .textInputAutocapitalization(.words)
-                    .focused($focusedField, equals: .name)
-                    .submitLabel(.next)
-                    .onSubmit { focusedField = .email }
-            }
-            field("Email") {
-                TextField("Email", text: $email)
-                    .textContentType(.username)
-                    .keyboardType(.emailAddress)
-                    .focused($focusedField, equals: .email)
-                    .submitLabel(.next)
-                    .onSubmit { focusedField = .password }
-            }
-            field("Password") {
-                SecureField("Password", text: $password)
-                    .textContentType(.newPassword)
-                    .focused($focusedField, equals: .password)
-                    .submitLabel(.next)
-                    .onSubmit { focusedField = .confirmation }
-            }
-            field("Confirm password") {
-                SecureField("Confirm password", text: $confirmation)
-                    .textContentType(.newPassword)
-                    .focused($focusedField, equals: .confirmation)
-                    .submitLabel(.done)
-                    .onSubmit { focusedField = nil }
+            VStack(alignment: .leading, spacing: 14) {
+                FormField("Display name") {
+                    TextField("Display name", text: $displayName)
+                        .textContentType(.nickname)
+                        .textInputAutocapitalization(.words)
+                        .focused($focusedField, equals: .name)
+                        .submitLabel(.next)
+                        .onSubmit { focusedField = .email }
+                        .formFieldWell()
+                }
+                FormField("Email") {
+                    TextField("Email", text: $email)
+                        .textContentType(.username)
+                        .keyboardType(.emailAddress)
+                        .focused($focusedField, equals: .email)
+                        .submitLabel(.next)
+                        .onSubmit { focusedField = .password }
+                        .formFieldWell()
+                }
+                FormField("Password") {
+                    SecureField("Password", text: $password)
+                        .textContentType(.newPassword)
+                        .focused($focusedField, equals: .password)
+                        .submitLabel(.next)
+                        .onSubmit { focusedField = .confirmation }
+                        .formFieldWell()
+                }
+                FormField("Confirm password") {
+                    SecureField("Confirm password", text: $confirmation)
+                        .textContentType(.newPassword)
+                        .focused($focusedField, equals: .confirmation)
+                        .submitLabel(.done)
+                        .onSubmit { focusedField = nil }
+                        .formFieldWell()
+                }
             }
             Toggle(isOn: $legalAcceptance) {
                 Text("I agree to the Terms of Service and Code of Conduct and acknowledge the Privacy Policy.")
                     .font(.footnote)
             }
+            .tint(HuddlStyle.accent)
             .accessibilityIdentifier("Accept legal documents")
             HStack(spacing: 12) {
                 legalLink("Terms of Service", path: "terms")
@@ -61,21 +67,16 @@ struct RegistrationForm: View {
             }
             Button(action: register) {
                 HStack {
-                    if account.isBusy { ProgressView().tint(.white) }
+                    if account.isBusy { ProgressView() }
                     Text(account.isBusy ? "Creating account…" : "Create account")
                 }
-                    .font(.headline)
-                    .frame(maxWidth: .infinity, minHeight: 52)
-                    .foregroundStyle(.white)
-                    .background(HuddlStyle.accent.opacity(canRegister ? 1 : 0.35), in: .rect(cornerRadius: 16))
-                    .contentShape(.rect)
+                .font(.headline)
+                .frame(maxWidth: .infinity, minHeight: 36)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.glassProminent)
             .disabled(!canRegister)
             Button(action: onSignIn) {
-                Text("Back to sign in")
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .contentShape(.rect)
+                Text("Back to sign in").sheetLink()
             }
         }
         .textInputAutocapitalization(.never)
@@ -86,17 +87,10 @@ struct RegistrationForm: View {
     private func legalLink(_ title: String, path: String) -> some View {
         Link(destination: URL(string: "https://huddlz.com/" + path)!) {
             Text(title)
-                .font(.footnote)
+                .font(.footnote.weight(.semibold))
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .contentShape(.rect)
-        }
-    }
-
-    private func field<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.subheadline)
-            content().padding(16).background(HuddlStyle.surface, in: .rect(cornerRadius: 14))
         }
     }
 

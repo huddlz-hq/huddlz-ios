@@ -28,20 +28,15 @@ struct AccountView: View {
 
     private var accountContent: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                HStack(alignment: .top) {
-                    Text(account.user != nil ? "Your account" : (isRegistering ? "Create your account" : "Welcome back"))
-                        .font(.largeTitle.bold())
-                        .accessibilityAddTraits(.isHeader)
-                    Spacer(minLength: 8)
+            VStack(alignment: .leading, spacing: 22) {
+                SheetHeader(title: title, subtitle: subtitle) {
                     Button { dismiss() } label: {
                         Image(systemName: "xmark")
                             .font(.body.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 44, height: 44)
-                            .background(HuddlStyle.surface, in: .circle)
+                            .frame(width: 28, height: 28)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.glass)
+                    .buttonBorderShape(.circle)
                     .accessibilityLabel("Close account")
                     .disabled(account.isBusy)
                 }
@@ -50,10 +45,9 @@ struct AccountView: View {
                     Button(role: .destructive) { Task { await account.signOut() } } label: {
                         Text("Sign out")
                             .font(.headline)
-                            .frame(maxWidth: .infinity, minHeight: 52)
-                            .background(HuddlStyle.surface, in: .rect(cornerRadius: 16))
-                            .contentShape(.rect)
+                            .frame(maxWidth: .infinity, minHeight: 36)
                     }
+                    .buttonStyle(.glass)
                     .disabled(account.isBusy)
                 } else if isRegistering {
                     RegistrationForm(email: $email, onSuccess: { isChoosingHome = true }, onSignIn: {
@@ -66,6 +60,7 @@ struct AccountView: View {
                 if account.isBusy && !isRegistering { ProgressView("Please wait…") }
                 if account.canRetrySession {
                     Button("Try checking account again") { Task { await account.restore() } }
+                        .buttonStyle(.glass)
                         .disabled(account.isBusy)
                 }
                 if !isRegistering, let message = account.message {
@@ -76,89 +71,90 @@ struct AccountView: View {
             .padding(.top, 12)
             .frame(maxWidth: 560)
             .frame(maxWidth: .infinity)
+            // The reset sheet stacks on this one; its fields must not be read (or tapped) through it.
+            .accessibilityHidden(isResettingPassword)
         }
         .scrollBounceBehavior(.basedOnSize)
-        .background(HuddlStyle.background)
-        .presentationDetents(dynamicTypeSize.isAccessibilitySize || isRegistering ? [.large] : [.height(account.user == nil ? 600 : 340), .large])
+        .presentationBackground(.regularMaterial)
+        .presentationDetents(dynamicTypeSize.isAccessibilitySize || isRegistering ? [.large] : [.height(account.user == nil ? 640 : 360), .large])
         .presentationDragIndicator(.visible)
         .interactiveDismissDisabled(account.isBusy)
         .sheet(isPresented: $isResettingPassword) { PasswordResetView(email: $email) }
     }
 
+    private var title: String {
+        account.user != nil ? "Your account" : (isRegistering ? "Create your account" : "Welcome back")
+    }
+
+    private var subtitle: String {
+        account.user != nil ? "You’re signed in." : (isRegistering ? "Find your people. Join a huddl." : "Sign in to huddlz")
+    }
+
     private var signInForm: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text("Sign in to Huddlz").foregroundStyle(.secondary)
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Email").font(.subheadline)
-                TextField("Email", text: $email)
-                    .textContentType(.username)
-                    .keyboardType(.emailAddress)
-                    .focused($focusedField, equals: .email)
-                    .submitLabel(.next)
-                    .onSubmit { focusedField = showsPassword ? .visiblePassword : .password }
-                    .padding(16)
-                    .background(HuddlStyle.surface, in: .rect(cornerRadius: 14))
-            }
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Password").font(.subheadline)
-                HStack(spacing: 0) {
-                    Group {
-                        if showsPassword {
-                            TextField("Password", text: $password)
-                                .focused($focusedField, equals: .visiblePassword)
-                        } else {
-                            SecureField("Password", text: $password)
-                                .focused($focusedField, equals: .password)
-                        }
-                    }
-                    .textContentType(.password)
-                    .submitLabel(.go)
-                    .onSubmit { signIn() }
-                    .padding(.leading, 16)
-                    .padding(.vertical, 16)
-                    Button {
-                        showsPassword.toggle()
-                        focusedField = showsPassword ? .visiblePassword : .password
-                    } label: {
-                        Image(systemName: showsPassword ? "eye.slash" : "eye")
-                            .foregroundStyle(.secondary)
-                            .frame(width: 52, height: 52)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(showsPassword ? "Hide password" : "Show password")
+            VStack(alignment: .leading, spacing: 14) {
+                FormField("Email") {
+                    TextField("Email", text: $email)
+                        .textContentType(.username)
+                        .keyboardType(.emailAddress)
+                        .focused($focusedField, equals: .email)
+                        .submitLabel(.next)
+                        .onSubmit { focusedField = showsPassword ? .visiblePassword : .password }
+                        .formFieldWell()
                 }
-                .background(HuddlStyle.surface, in: .rect(cornerRadius: 14))
+                FormField("Password") {
+                    HStack(spacing: 0) {
+                        Group {
+                            if showsPassword {
+                                TextField("Password", text: $password)
+                                    .focused($focusedField, equals: .visiblePassword)
+                            } else {
+                                SecureField("Password", text: $password)
+                                    .focused($focusedField, equals: .password)
+                            }
+                        }
+                        .textContentType(.password)
+                        .submitLabel(.go)
+                        .onSubmit { signIn() }
+                        Button {
+                            showsPassword.toggle()
+                            focusedField = showsPassword ? .visiblePassword : .password
+                        } label: {
+                            Image(systemName: showsPassword ? "eye.slash" : "eye")
+                                .foregroundStyle(.secondary)
+                                .frame(width: 44, height: 52)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(showsPassword ? "Hide password" : "Show password")
+                    }
+                    .formFieldWell(trailingInset: 4)
+                }
             }
             Button(action: signIn) {
                 Text("Sign in")
                     .font(.headline)
-                    .frame(maxWidth: .infinity, minHeight: 52)
-                    .foregroundStyle(.white)
-                    .background(HuddlStyle.accent.opacity(canSignIn ? 1 : 0.35), in: .rect(cornerRadius: 16))
-                    .contentShape(.rect)
+                    .frame(maxWidth: .infinity, minHeight: 36)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.glassProminent)
             .disabled(!canSignIn)
-            Button {
-                focusedField = nil
-                password = ""
-                showsPassword = false
-                isResettingPassword = true
-            } label: {
-                Text("Forgot password?")
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .contentShape(.rect)
-            }
-            Button {
-                focusedField = nil
-                password = ""
-                showsPassword = false
-                account.clearMessage()
-                isRegistering = true
-            } label: {
-                Text("Create an account")
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .contentShape(.rect)
+            VStack(spacing: 0) {
+                Button {
+                    focusedField = nil
+                    password = ""
+                    showsPassword = false
+                    isResettingPassword = true
+                } label: {
+                    Text("Forgot password?").sheetLink()
+                }
+                Button {
+                    focusedField = nil
+                    password = ""
+                    showsPassword = false
+                    account.clearMessage()
+                    isRegistering = true
+                } label: {
+                    Text("Create an account").sheetLink()
+                }
             }
             Text("Browse anytime. Sign in when you’re ready.")
                 .font(.footnote)
@@ -180,9 +176,10 @@ struct AccountView: View {
         let initials = name.split(whereSeparator: \.isWhitespace).prefix(2).compactMap(\.first).map(String.init).joined()
         return HStack(spacing: 16) {
             Text(initials.isEmpty ? String(user.email.prefix(1)).uppercased() : initials.uppercased())
-                .font(.title2.weight(.semibold))
-                .frame(width: 72, height: 72)
-                .background(HuddlStyle.accent.opacity(0.25), in: .circle)
+                .font(.system(.title2, design: .rounded, weight: .heavy))
+                .foregroundStyle(HuddlStyle.accent)
+                .frame(width: 64, height: 64)
+                .background(HuddlStyle.accent.opacity(0.12), in: .circle)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 if !name.isEmpty { Text(name).font(.title3.bold()) }
@@ -190,6 +187,9 @@ struct AccountView: View {
             }
             .textSelection(.enabled)
         }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .surfaceCard()
     }
 
     private func signIn() {
