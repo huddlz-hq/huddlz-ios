@@ -21,10 +21,10 @@ jobs:
       fail-fast: false
       matrix:
         suite: [accounts, rsvp-and-discovery, location-and-joining, remaining]
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 30
     env:
-      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
     steps:
       - uses: actions/checkout@v7
         with:
@@ -39,7 +39,7 @@ jobs:
         timeout-minutes: 2
         run: |
           simulator_id="$(xcrun simctl list devices available --json | jq -er '
-            .devices["com.apple.CoreSimulator.SimRuntime.iOS-26-5"]
+            .devices["com.apple.CoreSimulator.SimRuntime.iOS-27-0"]
             | map(select(.name == "iPhone 17"))
             | if length == 1 then .[0].udid else error("Expected one iPhone 17 simulator") end
           ')"

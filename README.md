@@ -4,8 +4,8 @@ Native iOS app built with Swift and SwiftUI. Public discovery connects to huddlz
 
 ## Requirements
 
-- Xcode 26.6 (used to create this project)
-- An iOS simulator runtime supported by your Xcode installation (the starter used iOS 26.5)
+- Xcode 27.0 (the current stable toolchain; the project was created with Xcode 26.6)
+- An iOS 27.0 simulator runtime for the default local test command
 - Minimum supported OS: iOS 26.0; iPhone and iPad supported by the template. Use iOS 26 as the baseline; guard APIs introduced in later releases with availability checks.
 
 ## Run
@@ -130,7 +130,7 @@ The groups were balanced using main's CI run 34439192628: roughly 392–404 seco
 
 Simulator builds use ad-hoc signing so tests can exercise the real Keychain. Disabling signing prevents Keychain access; no signing certificates or developer team are required for these simulator tests.
 
-The workflow uses Xcode 26.6 and an iPhone 17 simulator running iOS 26.5 on a macOS 26 runner. It uses the shared Huddlz scheme and requires no signing certificates or production credentials. Runner availability is listed in [GitHub’s macOS image documentation](https://github.com/actions/runner-images/blob/main/images/macos/macos-26-Readme.md).
+The workflow uses stable Xcode 27.0 and an iPhone 17 simulator running iOS 27.0 on GitHub’s `xcode-27` runner. It uses the shared Huddlz scheme and requires no signing certificates or production credentials. GitHub currently marks this runner image as public preview; its Xcode 27.0 toolchain is a stable release. Runner availability and installed versions are listed in [GitHub’s Xcode 27 image documentation](https://github.com/actions/runner-images/blob/main/images/macos/xcode-27-arm64-Readme.md).
 
 Open any Behavior tests group on a PR to see its Xcode logs. Each group saves an `ios-test-results-<group>` artifact for seven days, including the build log, test summary, and an `.xcresult` bundle you can open in Xcode.
 
