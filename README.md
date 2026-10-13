@@ -5,6 +5,7 @@ Native iOS app built with Swift and SwiftUI. Public discovery connects to huddlz
 ## Requirements
 
 - Xcode 27.0 (the current stable toolchain; the project was created with Xcode 26.6)
+- Swift 6 language mode for the app and both test targets
 - An iOS 27.0 simulator runtime for the default local test command
 - Minimum supported OS: iOS 26.0; iPhone and iPad supported by the template. Use iOS 26 as the baseline; guard APIs introduced in later releases with availability checks.
 
