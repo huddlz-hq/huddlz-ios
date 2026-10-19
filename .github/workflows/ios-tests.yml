@@ -15,16 +15,69 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  latest-toolchain:
+    name: Xcode 27.1 compiler compatibility
+    runs-on: xcode-27
+    timeout-minutes: 20
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Verify stable toolchain
+        run: |
+          xcodebuild -version
+          test "$(xcodebuild -version | head -1)" = "Xcode 27.1"
+          test "$(xcodebuild -version | tail -1)" = "Build version 27A9275"
+
+      - name: Build all test targets
+        run: |
+          set -o pipefail
+          xcodebuild build-for-testing \
+            -project Huddlz/Huddlz.xcodeproj \
+            -scheme Huddlz \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            ARCHS="$(uname -m)" \
+            -derivedDataPath "$RUNNER_TEMP/HuddlzLatestDerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee "$RUNNER_TEMP/latest-debug-build.log"
+
+      - name: Build Release app
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Huddlz/Huddlz.xcodeproj \
+            -scheme Huddlz \
+            -configuration Release \
+            -destination 'generic/platform=iOS Simulator' \
+            ARCHS="$(uname -m)" \
+            -derivedDataPath "$RUNNER_TEMP/HuddlzLatestDerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee "$RUNNER_TEMP/latest-release-build.log"
+
+      - name: Save compiler logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-latest-compiler-results
+          path: |
+            ${{ runner.temp }}/latest-debug-build.log
+            ${{ runner.temp }}/latest-release-build.log
+          retention-days: 7
+
   test:
     name: Behavior tests (${{ matrix.suite }})
     strategy:
       fail-fast: false
       matrix:
         suite: [accounts, rsvp-and-discovery, location-and-joining, remaining]
-    runs-on: xcode-27
-    timeout-minutes: 40
+    runs-on: macos-26
+    timeout-minutes: 30
     env:
-      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     steps:
       - uses: actions/checkout@v7
         with:
@@ -33,20 +86,16 @@ jobs:
       - name: Show toolchain
         run: |
           xcodebuild -version
-          test "$(xcodebuild -version | head -1)" = "Xcode 27.1"
-          test "$(xcodebuild -version | tail -1)" = "Build version 27A9275"
           xcrun simctl list devices available
-
-      - name: Install supported Simulator runtime
-        timeout-minutes: 10
-        run: xcodebuild -downloadPlatform iOS -buildVersion 26.5
 
       - name: Start Simulator
         timeout-minutes: 2
         run: |
-          simulator_id="$(xcrun simctl create 'Huddlz iPhone 17' \
-            com.apple.CoreSimulator.SimDeviceType.iPhone-17 \
-            com.apple.CoreSimulator.SimRuntime.iOS-26-5)"
+          simulator_id="$(xcrun simctl list devices available --json | jq -er '
+            .devices["com.apple.CoreSimulator.SimRuntime.iOS-26-5"]
+            | map(select(.name == "iPhone 17"))
+            | if length == 1 then .[0].udid else error("Expected one iPhone 17 simulator") end
+          ')"
           xcrun simctl boot "$simulator_id"
           echo "HUDDLZ_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
 
@@ -116,10 +165,13 @@ jobs:
   required-tests:
     name: Native behavior tests
     runs-on: ubuntu-latest
-    needs: test
+    needs: [test, latest-toolchain]
     if: always()
     steps:
-      - name: Require every test group to pass
+      - name: Require every test group and compiler check to pass
         env:
           TEST_RESULT: ${{ needs.test.result }}
-        run: test "$TEST_RESULT" = success
+          COMPILER_RESULT: ${{ needs.latest-toolchain.result }}
+        run: |
+          test "$TEST_RESULT" = success
+          test "$COMPILER_RESULT" = success
