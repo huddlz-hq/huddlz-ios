@@ -4,9 +4,9 @@ Native iOS app built with Swift and SwiftUI. Public discovery connects to huddlz
 
 ## Requirements
 
-- Xcode 26.6 (the CI toolchain)
+- Xcode 27.1, build 27A9275 (the CI toolchain)
 - Swift 6 language mode for the app and both test targets
-- An iOS 26.5 simulator runtime for the default local test command
+- An iOS 27.0 simulator runtime for the default local test command
 - Minimum supported OS: iOS 26.0; iPhone and iPad supported by the template. Use iOS 26 as the baseline; guard APIs introduced in later releases with availability checks.
 
 ## Run
@@ -131,9 +131,9 @@ The groups were balanced using main's CI run 34439192628: roughly 392–404 seco
 
 Simulator builds use ad-hoc signing so tests can exercise the real Keychain. Disabling signing prevents Keychain access; no signing certificates or developer team are required for these simulator tests.
 
-The workflow uses Xcode 26.6 and an iPhone 17 simulator running iOS 26.5 on a macOS 26 runner. It uses the shared Huddlz scheme and requires no signing certificates or production credentials. Runner availability is listed in [GitHub’s macOS image documentation](https://github.com/actions/runner-images/blob/main/images/macos/macos-26-Readme.md).
+The workflow uses stable Xcode 27.1 (build 27A9275) and an iPhone 17 simulator running iOS 27.0 on GitHub's `xcode-27` runner. The compiler includes the iOS 27.1 SDK; the runner currently has only the iOS 27.0 simulator runtime installed. The runner image remains [public preview](https://github.com/actions/runner-images/issues/14404). It uses the shared Huddlz scheme and requires no signing certificates or production credentials. [GitHub's runner inventory](https://github.com/actions/runner-images/blob/main/images/macos/xcode-27-arm64-Readme.md) supplies the stable build through `/Applications/Xcode_27.1.app`; CI checks its version and build before testing.
 
-The October 12 dependency review enabled Swift 6 for all targets. Xcode 27.0/iOS 27.0 remains blocked: a full native run found twelve UI failures, including the missing initial Discover search field, artwork rendering, and registration legal links. Automatic search presentation did not restore the field; linking search activation to tab selection forced the keyboard open and broke the Agenda transition. Keep the iOS 26.5 test runtime until these behaviors work on iOS 27. GitHub currently supplies Xcode 27.0 only on its [public-preview runner](https://github.com/actions/runner-images/issues/14404); Xcode 27.1 RC and 27.2 beta are excluded from stable maintenance.
+The October dependency review enabled Swift 6 for all targets. Xcode 27.0/iOS 27.0 previously failed twelve UI behaviors, including initial Discover search, artwork rendering, and registration legal links. [Apple released stable Xcode 27.1 on October 15](https://developer.apple.com/news/releases/?id=10152026a); the current update reruns every behavior on that release without weakening test coverage. Xcode 27.2 beta is excluded from stable maintenance.
 
 Open any Behavior tests group on a PR to see its Xcode logs. Each group saves an `ios-test-results-<group>` artifact for seven days, including the build log, test summary, and an `.xcresult` bundle you can open in Xcode.
 

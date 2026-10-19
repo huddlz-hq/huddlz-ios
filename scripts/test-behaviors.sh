@@ -5,7 +5,7 @@ repo_dir="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo_dir"
 run_dir="$(mktemp -d "${TMPDIR:-/tmp}/huddlz-tests.XXXXXX")"
 workers="${HUDDLZ_TEST_WORKERS:-4}"
-destination="${HUDDLZ_TEST_DESTINATION:-platform=iOS Simulator,name=iPhone 17,OS=26.5}"
+destination="${HUDDLZ_TEST_DESTINATION:-platform=iOS Simulator,name=iPhone 17,OS=27.0}"
 derived_data="${HUDDLZ_TEST_DERIVED_DATA:-${TMPDIR:-/tmp}/huddlz-behavior-tests}"
 
 printf 'Results: %s\nSimulator workers: %s\n' "$run_dir" "$workers"
