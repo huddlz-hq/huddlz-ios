@@ -4,8 +4,9 @@ Native iOS app built with Swift and SwiftUI. Public discovery connects to huddlz
 
 ## Requirements
 
-- Xcode 26.6 (used to create this project)
-- An iOS simulator runtime supported by your Xcode installation (the starter used iOS 26.5)
+- Xcode 26.6 for native behavior tests; CI also checks stable Xcode 27.1, build 27A9275
+- Swift 6 language mode for the app and both test targets
+- An iOS 26.5 simulator runtime for the default local test command
 - Minimum supported OS: iOS 26.0; iPhone and iPad supported by the template. Use iOS 26 as the baseline; guard APIs introduced in later releases with availability checks.
 
 ## Run
@@ -126,11 +127,15 @@ GitHub Actions runs the full native test suite for pull requests into main and p
 
 Each runner starts its Simulator before building the tests for the generic iOS Simulator destination. Simulator startup and compilation overlap. After the build, CI waits for Simulator readiness and runs `test-without-building` against the same build products. Separate workflow steps show build time, any remaining readiness wait, and test time; artifacts include both build and test logs.
 
-The groups were balanced using main's CI run 34439192628: roughly 392–404 seconds of UI test execution per group, before runner setup and build time. Rebalance from recorded timings as the suite grows. Each group must run tests, pass, and report no skips. The required “Native behavior tests” check passes only when all four groups succeed. You can also start it from Actions → iOS tests → Run workflow.
+The groups were balanced using main's CI run 34439192628: roughly 392–404 seconds of UI test execution per group, before runner setup and build time. Rebalance from recorded timings as the suite grows. Each group must run tests, pass, and report no skips. The required “Native behavior tests” check passes only when all four groups and the Xcode 27.1 compiler check succeed. You can also start it from Actions → iOS tests → Run workflow.
 
 Simulator builds use ad-hoc signing so tests can exercise the real Keychain. Disabling signing prevents Keychain access; no signing certificates or developer team are required for these simulator tests.
 
-The workflow uses Xcode 26.6 and an iPhone 17 simulator running iOS 26.5 on a macOS 26 runner. It uses the shared Huddlz scheme and requires no signing certificates or production credentials. Runner availability is listed in [GitHub’s macOS image documentation](https://github.com/actions/runner-images/blob/main/images/macos/macos-26-Readme.md).
+The behavior-test jobs use Xcode 26.6 and an iPhone 17 simulator running iOS 26.5 on `macos-26`. The separate required compiler job uses [stable Xcode 27.1 (27A9275)](https://developer.apple.com/news/releases/?id=10152026a) and the iOS 27.1 SDK to build all test targets in Debug and the app in Release. It verifies the compiler version and build. Both checks must pass; a successful build does not count as a behavior-test pass. No signing certificates or production credentials are required.
+
+Xcode 27.1 is available on GitHub's [public-preview `xcode-27` runner](https://github.com/actions/runner-images/issues/14404), through `/Applications/Xcode_27.1.app`. See the [latest-compiler inventory](https://github.com/actions/runner-images/blob/main/images/macos/xcode-27-arm64-Readme.md) and [behavior-test runner inventory](https://github.com/actions/runner-images/blob/main/images/macos/macos-26-Readme.md). The compiler job saves Debug and Release build logs as `ios-latest-compiler-results` for seven days.
+
+The October dependency review enabled Swift 6 for all targets. The [October 19 Xcode 27.1/iOS 27.0 attempt](https://github.com/huddlz-hq/huddlz-ios/actions/runs/39250596328) reproduced twelve UI failures: Discover search and tab navigation, search filters and refresh, artwork rendering, and registration legal links. Its remaining group also reached the 30-minute job limit before completing. The [Xcode 27.1/iOS 26.5 fallback](https://github.com/huddlz-hq/huddlz-ios/actions/runs/39254783542) downloaded the supported runtime and compiled successfully, but XCUITest failed to initialize with “Timed out waiting for AX loaded notification.” That host failure does not establish a behavior pass or an app regression. Keep native behavior execution on the known-working Xcode 26.6/iOS 26.5 runner while requiring latest-compiler compatibility. No tests are skipped or weakened. Full Xcode 27.1 runtime adoption and the iOS 27 UI migration remain blocked; Xcode 27.2 beta is excluded from stable maintenance.
 
 Open any Behavior tests group on a PR to see its Xcode logs. Each group saves an `ios-test-results-<group>` artifact for seven days, including the build log, test summary, and an `.xcresult` bundle you can open in Xcode.
 

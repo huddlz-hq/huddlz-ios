@@ -2,7 +2,7 @@
 import CoreLocation
 
 /// Fails one external location request; authorization and subsequent fixes stay real.
-final class UITestLocationManager: CLLocationManager {
+nonisolated final class UITestLocationManager: CLLocationManager {
     private var shouldFail = true
 
     static func makeIfRequested() -> CLLocationManager? {
