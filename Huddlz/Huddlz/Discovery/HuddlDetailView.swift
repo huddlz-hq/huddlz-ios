@@ -6,6 +6,9 @@ struct HuddlDetailView: View {
     @State private var huddl: Huddl?
     @State private var errorMessage: String?
     @State private var reload = UUID()
+    @State private var titleBottom = CGFloat.infinity
+    @State private var scrolled: CGFloat = 0
+    @State private var addsToCalendar = false
 
     var body: some View {
         ScrollView {
@@ -17,8 +20,8 @@ struct HuddlDetailView: View {
                             EventTypePill(eventType: huddl.attributes.eventType)
                             Text(huddl.title)
                                 .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                                .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named("page")).maxY } action: { titleBottom = $0 }
                         }
-                        HuddlAttendanceView(id: id, lifecycleState: huddl.attributes.lifecycleState, endsAt: huddl.attributes.endsAt)
                         if huddl.attributes.lifecycleState == "cancelled" {
                             notice("This huddl has been cancelled", symbol: "calendar.badge.exclamationmark",
                                    detail: huddl.attributes.cancellationReason)
@@ -29,9 +32,11 @@ struct HuddlDetailView: View {
                         location(huddl)
                         VStack(alignment: .leading, spacing: 8) {
                             Text("About this huddl").font(.title3.bold())
-                            Text(huddl.attributes.description?.isEmpty == false ? huddl.attributes.description! : "The organizer hasn’t added a description yet.")
-                                .foregroundStyle(.secondary)
-                                .textSelection(.enabled)
+                            if let description = huddl.attributes.description, !description.isEmpty {
+                                Text(description).textSelection(.enabled)
+                            } else {
+                                Text("The organizer hasn’t added a description yet.").foregroundStyle(.secondary)
+                            }
                         }
                         if huddl.attributes.eventType != .inPerson {
                             HuddlJoiningView(id: id)
@@ -44,6 +49,7 @@ struct HuddlDetailView: View {
                 }
                 .frame(maxWidth: 640, alignment: .leading)
                 .frame(maxWidth: .infinity)
+                .coordinateSpace(.named("page"))
             } else if let errorMessage {
                 ContentUnavailableView {
                     Label("Couldn’t load this huddl", systemImage: "calendar.badge.exclamationmark")
@@ -57,10 +63,45 @@ struct HuddlDetailView: View {
                 ProgressView("Loading huddl…").frame(maxWidth: .infinity, minHeight: 180)
             }
         }
+        .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y + $0.contentInsets.top } action: { _, offset in scrolled = offset }
+        // The RSVP stays in reach however far people read.
+        .safeAreaBar(edge: .bottom) {
+            if let huddl {
+                HuddlAttendanceView(id: id, lifecycleState: huddl.attributes.lifecycleState, endsAt: huddl.attributes.endsAt)
+                    .frame(maxWidth: 600)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+            }
+        }
         .background { AmbientBackground() }
-        .navigationTitle("The huddl")
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
+        .toolbar {
+            // The page's own title names the huddl; the bar takes the name only once that title scrolls under it.
+            ToolbarItem(placement: .principal) {
+                if let huddl, titleBottom < scrolled {
+                    Text(huddl.title)
+                        .font(.headline)
+                        .lineLimit(1)
+                        .transition(.opacity)
+                }
+            }
+            if let huddl {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button("Add to Calendar", systemImage: "calendar.badge.plus") { addsToCalendar = true }
+                    if let url = huddl.webURL {
+                        ShareLink(item: url, preview: SharePreview(huddl.title)) {
+                            Label("Share", systemImage: "square.and.arrow.up")
+                        }
+                    }
+                }
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: titleBottom < scrolled)
+        .sheet(isPresented: $addsToCalendar) {
+            if let huddl { HuddlCalendarEditor(huddl: huddl).ignoresSafeArea() }
+        }
         .task(id: reload) { await load() }
     }
 
@@ -123,7 +164,9 @@ struct HuddlDetailView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(huddl.dayTitle).font(.headline)
                     Text(huddl.timeRange).font(.subheadline).foregroundStyle(.secondary)
-                    Text(huddl.attributes.timeZone).font(.caption).foregroundStyle(.secondary)
+                    if let zoneName = huddl.zoneName {
+                        Text(zoneName).font(.caption).foregroundStyle(.secondary)
+                    }
                 }
             }
             .padding(.horizontal, 16)

@@ -5,6 +5,7 @@ struct Huddl: Identifiable, Decodable, Hashable, Sendable {
     let attributes: Attributes
     let relationships: Relationships?
     var hostName: String?
+    var hostSlug: String?
 
     struct Relationships: Decodable, Hashable, Sendable {
         let group: Group?
@@ -49,6 +50,18 @@ struct Huddl: Identifiable, Decodable, Hashable, Sendable {
     }
 
     var timeZone: TimeZone { TimeZone(identifier: attributes.timeZone) ?? .gmt }
+
+    /// The huddl's page on huddlz.com, which lives under its group; unknown until the group's slug loads.
+    var webURL: URL? {
+        guard let hostSlug, !hostSlug.isEmpty else { return nil }
+        return URL(string: "https://huddlz.com/groups")?.appending(components: hostSlug, "huddlz", id)
+    }
+
+    /// The zone's everyday name, such as "Central Time", only when it differs from the person's own.
+    var zoneName: String? {
+        let name = timeZone.localizedName(for: .generic, locale: .current)
+        return name == TimeZone.current.localizedName(for: .generic, locale: .current) ? nil : name
+    }
 
     var timeZoneLabel: String {
         timeZone.abbreviation(for: attributes.startsAt) ?? attributes.timeZone

@@ -23,6 +23,8 @@ struct GroupDetailView: View {
     @State private var isLoadingMore = false
     @State private var moreError = false
     @State private var moreRequest: UUID?
+    @State private var titleBottom = CGFloat.infinity
+    @State private var scrolled: CGFloat = 0
 
     var body: some View {
         ScrollView {
@@ -33,6 +35,7 @@ struct GroupDetailView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(group.attributes.name)
                                 .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                                .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named("page")).maxY } action: { titleBottom = $0 }
                             if let location = group.attributes.location, !location.isEmpty {
                                 Label(location, systemImage: "mappin.and.ellipse")
                                     .font(.subheadline)
@@ -87,13 +90,27 @@ struct GroupDetailView: View {
                 }
             }
             .padding(20)
+            .coordinateSpace(.named("page"))
             .frame(maxWidth: 640, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
+        .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y + $0.contentInsets.top } action: { _, offset in scrolled = offset }
         .background { AmbientBackground() }
-        .navigationTitle("The group")
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
+        .toolbar {
+            // As on the huddl page, the bar names the group only once the page's own title scrolls under it.
+            ToolbarItem(placement: .principal) {
+                if let group, titleBottom < scrolled {
+                    Text(group.attributes.name)
+                        .font(.headline)
+                        .lineLimit(1)
+                        .transition(.opacity)
+                }
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: titleBottom < scrolled)
         .task(id: reload) { await load() }
         .task(id: moreRequest) {
             if moreRequest != nil { await loadMore() }
