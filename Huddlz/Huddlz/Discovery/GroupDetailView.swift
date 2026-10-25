@@ -13,6 +13,7 @@ struct HostingGroup: Decodable, Identifiable {
 
 struct GroupDetailView: View {
     let id: String
+    @Environment(AccountStore.self) private var account
     @State private var group: HostingGroup?
     @State private var huddlz: [Huddl] = []
     @State private var hasLoadedHuddlz = false
@@ -95,6 +96,10 @@ struct GroupDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
         .task(id: reload) { await load() }
+        .onChange(of: account.blockRevision) {
+            hasLoadedHuddlz = false
+            reload = UUID()
+        }
         .task(id: moreRequest) {
             if moreRequest != nil { await loadMore() }
         }
@@ -121,7 +126,7 @@ struct GroupDetailView: View {
         guard !hasLoadedHuddlz else { return }
         huddlzError = nil
         do {
-            let page = try await client.groupHuddlz(id: id)
+            let page = try await client.groupHuddlz(id: id, token: await account.browsingToken())
             try Task.checkCancellation()
             huddlz = page.huddlz
             nextPage = page.next
@@ -138,7 +143,7 @@ struct GroupDetailView: View {
         moreError = false
         defer { isLoadingMore = false }
         do {
-            let page = try await DiscoveryClient().groupPage(at: url, id: id)
+            let page = try await DiscoveryClient().groupPage(at: url, id: id, token: await account.browsingToken())
             try Task.checkCancellation()
             var ids = Set(huddlz.map(\.id))
             huddlz.append(contentsOf: page.huddlz.filter { ids.insert($0.id).inserted })

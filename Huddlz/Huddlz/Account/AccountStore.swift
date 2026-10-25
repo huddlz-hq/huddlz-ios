@@ -12,7 +12,11 @@ final class AccountStore {
     private(set) var isBusy = false
     private(set) var message: String?
     private(set) var canRetrySession = false
+    /// False until the saved session has been checked once, so the first search can wait to run as this person.
+    private(set) var hasCheckedSession = false
     private(set) var attendanceRevision = UUID()
+    /// Changes whenever this person blocks or unblocks someone, so lists drop or restore their huddlz.
+    private(set) var blockRevision = UUID()
     private let tokens: SessionTokenStore
     private let client: AccountClient
     #if DEBUG
@@ -47,7 +51,10 @@ final class AccountStore {
         isBusy = true
         canRetrySession = false
         message = nil
-        defer { isBusy = false }
+        defer {
+            isBusy = false
+            hasCheckedSession = true
+        }
         do {
             #if DEBUG
             // Seed only the isolated UI-test Keychain, then use normal session restoration.
@@ -140,6 +147,51 @@ final class AccountStore {
 
     func groupsPage(at url: URL) async throws -> GroupsPage {
         try await forCurrentUser { token in try await client.groupsPage(at: url, token: token) }
+    }
+
+    /// The session token for browsing as this person, or nil to browse as a visitor.
+    func browsingToken() async -> String? {
+        guard user != nil else { return nil }
+        return try? await tokens.load()
+    }
+
+    func organizedByMe(huddlID: String) async throws -> Bool {
+        try await forCurrentUser { token in try await client.organizedByMe(huddlID: huddlID, token: token) }
+    }
+
+    func reportOrganizer(huddlID: String, reason: ReportReason, details: String) async throws {
+        try await moderating { token in
+            try await client.reportOrganizer(huddlID: huddlID, reason: reason, details: details, token: token)
+        }
+    }
+
+    func blockOrganizer(huddlID: String) async throws {
+        try await moderating { token in try await client.blockOrganizer(huddlID: huddlID, token: token) }
+        blockRevision = UUID()
+    }
+
+    func blockedPeople() async throws -> [BlockedPerson] {
+        try await forCurrentUser { token in try await client.blockedPeople(token: token) }
+    }
+
+    func unblock(_ person: BlockedPerson) async throws {
+        try await moderating { token in try await client.unblock(person, token: token) }
+        blockRevision = UUID()
+    }
+
+    /// Like `forCurrentUser`, but an expired session signs the person out with a message they can act on.
+    private func moderating(_ request: (String) async throws -> Void) async throws {
+        let session = sessionRevision
+        guard let userID = user?.id, let token = try await tokens.load() else { throw AccountError.unauthorized }
+        do {
+            try await request(token)
+            guard user?.id == userID, session == sessionRevision else { throw CancellationError() }
+        } catch AccountError.unauthorized {
+            guard user?.id == userID, session == sessionRevision else { throw CancellationError() }
+            user = nil
+            try? await tokens.clear()
+            throw ModerationError(message: "Your session expired. Please sign in again.")
+        }
     }
 
     /// Runs an authenticated request and discards its result if the account changed meanwhile.

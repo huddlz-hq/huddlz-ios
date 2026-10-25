@@ -322,6 +322,110 @@ struct AccountClient {
 
     private static let groupsURL = URL(string: "https://huddlz.com/api/json/groups/mine")!
 
+    /// Whether the signed-in person organized this huddl; they never report or block themselves.
+    func organizedByMe(huddlID: String, token: String) async throws -> Bool {
+        struct Document: Decodable {
+            struct Resource: Decodable {
+                struct Attributes: Decodable { let organizedByMe: Bool }
+                let id: String
+                let attributes: Attributes
+            }
+            let data: Resource
+        }
+        var components = URLComponents(url: URL(string: "https://huddlz.com/api/json/huddlz")!.appending(component: huddlID), resolvingAgainstBaseURL: false)!
+        components.queryItems = [URLQueryItem(name: "fields[huddl]", value: "organized_by_me")]
+        var request = URLRequest(url: components.url!)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/vnd.api+json", forHTTPHeaderField: "Accept")
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let document = try decoder.decode(Document.self, from: await send(request))
+        guard document.data.id == huddlID else { throw AccountError.unavailable }
+        return document.data.attributes.organizedByMe
+    }
+
+    /// Asks huddlz staff to review whoever organized the huddl. The API never says who that is.
+    func reportOrganizer(huddlID: String, reason: ReportReason, details: String, token: String) async throws {
+        var input: [String: String] = ["huddl_id": huddlID, "reason": reason.rawValue]
+        let details = details.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !details.isEmpty { input["details"] = details }
+        var request = URLRequest(url: URL(string: "https://huddlz.com/api/json/account_reports/organizer")!)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/vnd.api+json", forHTTPHeaderField: "Accept")
+        request.setValue("application/vnd.api+json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["data": input])
+        try await moderate(request, refused: "This organizer can’t be reported.")
+    }
+
+    /// Hides huddlz the huddl's organizer runs from this person's searches and group pages.
+    func blockOrganizer(huddlID: String, token: String) async throws {
+        var request = URLRequest(url: URL(string: "https://huddlz.com/api/json/blocks/organizer")!)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/vnd.api+json", forHTTPHeaderField: "Accept")
+        request.setValue("application/vnd.api+json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "data": ["type": "user_block", "attributes": ["huddl_id": huddlID]]
+        ])
+        try await moderate(request, refused: "This organizer can’t be blocked.")
+    }
+
+    /// The people this person has blocked, most recent first.
+    func blockedPeople(token: String) async throws -> [BlockedPerson] {
+        var request = URLRequest(url: URL(string: "https://huddlz.com/api/json/blocks")!)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/vnd.api+json", forHTTPHeaderField: "Accept")
+        struct Document: Decodable {
+            struct Resource: Decodable {
+                struct Attributes: Decodable { let blockedUserName: String? }
+                let id: String
+                let attributes: Attributes
+            }
+            let data: [Resource]
+        }
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try decoder.decode(Document.self, from: await send(request)).data.map {
+            BlockedPerson(id: $0.id, name: $0.attributes.blockedUserName ?? "Someone you blocked")
+        }
+    }
+
+    func unblock(_ person: BlockedPerson, token: String) async throws {
+        var request = URLRequest(url: URL(string: "https://huddlz.com/api/json/blocks")!.appending(component: person.id))
+        request.httpMethod = "DELETE"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/vnd.api+json", forHTTPHeaderField: "Accept")
+        do {
+            _ = try await send(request)
+        } catch AccountError.unavailable {
+            throw ModerationError(message: "Couldn’t unblock \(person.name). Please try again.")
+        }
+    }
+
+    /// Sends a report or block and turns a refusal into words the person can act on.
+    private func moderate(_ request: URLRequest, refused: String) async throws {
+        let (data, response) = try await fetch(request)
+        try Task.checkCancellation()
+        guard let response = response as? HTTPURLResponse else { throw AccountError.unavailable }
+        switch response.statusCode {
+        case 200..<300: return
+        case 401: throw AccountError.unauthorized
+        case 403, 404: throw ModerationError(message: refused)
+        case 400, 422:
+            struct Errors: Decodable {
+                struct Detail: Decodable { let detail: String? }
+                let errors: [Detail]
+            }
+            let message = (try? JSONDecoder().decode(Errors.self, from: data))?.errors
+                .compactMap { $0.detail?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .first { !$0.isEmpty && $0.count <= 240 && $0.rangeOfCharacter(from: .controlCharacters) == nil }
+            throw ModerationError(message: message ?? refused)
+        case 429: throw ModerationError(message: "Too many attempts. Please wait a moment and try again.")
+        default: throw AccountError.unavailable
+        }
+    }
+
     func signOut(token: String) async throws {
         var request = URLRequest(url: URL(string: "https://huddlz.com/api/auth/sign_out")!)
         request.httpMethod = "DELETE"
@@ -379,6 +483,34 @@ private final class AccountRedirectPolicy: NSObject, URLSessionTaskDelegate, @un
 enum RSVPAction: String {
     case reserve = "rsvp"
     case cancel = "cancel_rsvp"
+}
+
+enum ReportReason: String, CaseIterable, Identifiable {
+    case spam, other
+
+    var id: Self { self }
+    var title: String {
+        switch self {
+        case .spam: "Spam or advertising"
+        case .other: "Other"
+        }
+    }
+    var detail: String {
+        switch self {
+        case .spam: "Promotions, coin listings, affiliate links, fake huddlz."
+        case .other: "Anything else huddlz staff should look at."
+        }
+    }
+}
+
+struct BlockedPerson: Identifiable, Equatable {
+    let id: String
+    let name: String
+}
+
+struct ModerationError: LocalizedError {
+    let message: String
+    var errorDescription: String? { message }
 }
 
 struct RSVPError: LocalizedError {

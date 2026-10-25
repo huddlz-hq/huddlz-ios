@@ -31,7 +31,8 @@ struct DiscoveryClient {
         }
     }
 
-    func search(_ query: DiscoveryQuery) async throws -> DiscoveryPage {
+    /// A signed-in search passes the session token, so huddlz from blocked organizers stay out.
+    func search(_ query: DiscoveryQuery, token: String? = nil) async throws -> DiscoveryPage {
         var components = URLComponents(url: baseURL.appending(path: "api/json/huddlz"), resolvingAgainstBaseURL: false)!
         components.queryItems = [
             URLQueryItem(name: "date_filter", value: query.dates.rawValue),
@@ -48,14 +49,14 @@ struct DiscoveryClient {
                 URLQueryItem(name: "distance_miles", value: String(query.distanceMiles))
             ])
         }
-        return try await page(at: components.url!)
+        return try await page(at: components.url!, token: token)
     }
 
-    func page(at url: URL) async throws -> DiscoveryPage {
+    func page(at url: URL, token: String? = nil) async throws -> DiscoveryPage {
         guard url.scheme == baseURL.scheme, url.host == baseURL.host, url.port == baseURL.port,
               url.path == baseURL.appending(path: "api/json/huddlz").path,
               url.user == nil, url.password == nil else { throw DiscoveryError.invalidResponse }
-        let document: PageDocument = try await get(url)
+        let document: PageDocument = try await get(url, token: token)
         return DiscoveryPage(huddlz: document.data, next: document.links?.next)
     }
 
@@ -78,13 +79,13 @@ struct DiscoveryClient {
         return document.data
     }
 
-    func groupHuddlz(id: String) async throws -> DiscoveryPage {
+    func groupHuddlz(id: String, token: String? = nil) async throws -> DiscoveryPage {
         var components = URLComponents(url: baseURL.appending(path: "api/json/huddlz/by_group"), resolvingAgainstBaseURL: false)!
         components.queryItems = [URLQueryItem(name: "group_id", value: id), URLQueryItem(name: "page[limit]", value: "20")]
-        return try await groupPage(at: components.url!, id: id)
+        return try await groupPage(at: components.url!, id: id, token: token)
     }
 
-    func groupPage(at url: URL, id: String) async throws -> DiscoveryPage {
+    func groupPage(at url: URL, id: String, token: String? = nil) async throws -> DiscoveryPage {
         let parameters = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         guard url.scheme == baseURL.scheme, url.host == baseURL.host, url.port == baseURL.port,
               url.path == baseURL.appending(path: "api/json/huddlz/by_group").path,
@@ -92,18 +93,21 @@ struct DiscoveryClient {
               parameters.filter({ $0.name == "group_id" }).map(\.value) == [id] else {
             throw DiscoveryError.invalidResponse
         }
-        let document: PageDocument = try await get(url)
+        let document: PageDocument = try await get(url, token: token)
         return DiscoveryPage(huddlz: document.data, next: document.links?.next)
     }
 
     private struct GroupDocument: Decodable { let data: HostingGroup }
 
-    private func get<Value: Decodable>(_ url: URL) async throws -> Value {
+    private func get<Value: Decodable>(_ url: URL, token: String? = nil) async throws -> Value {
         var request = URLRequest(url: url)
         request.setValue("application/vnd.api+json", forHTTPHeaderField: "Accept")
+        if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         let (data, response) = try await fetch(request)
         try Task.checkCancellation()
         guard let response = response as? HTTPURLResponse else { throw DiscoveryError.invalidResponse }
+        // An expired session still browses, just as a visitor would.
+        if response.statusCode == 401, token != nil { return try await get(url) }
         guard (200..<300).contains(response.statusCode) else {
             if response.statusCode == 404 { throw DiscoveryError.notFound }
             throw DiscoveryError.unavailable

@@ -42,6 +42,7 @@ struct AccountView: View {
                 }
                 if let user = account.user {
                     identity(user)
+                    BlockedPeopleView()
                     Button(role: .destructive) { Task { await account.signOut() } } label: {
                         Text("Sign out")
                             .font(.headline)
@@ -76,7 +77,7 @@ struct AccountView: View {
         }
         .scrollBounceBehavior(.basedOnSize)
         .presentationBackground(.regularMaterial)
-        .presentationDetents(dynamicTypeSize.isAccessibilitySize || isRegistering ? [.large] : [.height(account.user == nil ? 640 : 360), .large])
+        .presentationDetents(dynamicTypeSize.isAccessibilitySize || isRegistering ? [.large] : [.height(account.user == nil ? 640 : 520), .large])
         .presentationDragIndicator(.visible)
         .interactiveDismissDisabled(account.isBusy)
         .sheet(isPresented: $isResettingPassword) { PasswordResetView(email: $email) }

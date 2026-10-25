@@ -61,6 +61,7 @@ struct HuddlDetailView: View {
         .navigationTitle("The huddl")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
+        .organizerModeration(huddlID: id)
         .task(id: reload) { await load() }
     }
 
