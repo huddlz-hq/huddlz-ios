@@ -31,14 +31,17 @@ struct LocationSearchView: View {
                     }
                 }
                 Section {
-                    TextField("City or postal code", text: $text)
-                        .submitLabel(.search)
-                        .autocorrectionDisabled()
-                        .onSubmit { submit() }
-                    Button("Find places", action: submit)
-                        .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    // The keyboard's Search key runs the search.
+                    Label {
+                        TextField("City or postal code", text: $text)
+                            .submitLabel(.search)
+                            .autocorrectionDisabled()
+                            .onSubmit { submit() }
+                    } icon: {
+                        Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                    }
                 } footer: {
-                    Text("Choose a place to find huddlz nearby.")
+                    Text("Search for a city or postal code, then choose a place to find huddlz nearby.")
                 }
                 if let place {
                     Section("Selected location") {
@@ -68,11 +71,12 @@ struct LocationSearchView: View {
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
             .navigationTitle("Search location")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button(role: .close) { dismiss() }
                 }
             }
             .onChange(of: text) { _, _ in store.clear() }
@@ -85,6 +89,8 @@ struct LocationSearchView: View {
             .onDisappear { currentLocation.cancel() }
             .task(id: request) { await store.search(request.text) }
         }
+        // Matches the account sheets.
+        .presentationBackground(.regularMaterial)
     }
 
     private func submit() { request = SearchRequest(text: text) }

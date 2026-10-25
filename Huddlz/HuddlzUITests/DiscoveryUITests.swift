@@ -88,6 +88,19 @@ final class DiscoveryUITests: DiscoveryUITestCase {
         XCTAssertEqual(app.searchFields.firstMatch.value as? String, "coffee")
     }
 
+    func testTheLocationSheetSearchesFromTheKeyboardAndClosesWithoutChoosing() {
+        let app = launch(routes: [route(body: page([coffee]))])
+        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
+        app.buttons["Location: Anywhere"].tap()
+        let field = app.textFields["City or postal code"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        // The keyboard's Search key runs the search, so no second row competes with the field.
+        XCTAssertFalse(app.buttons["Find places"].exists)
+        app.buttons["Close"].tap()
+        XCTAssertTrue(field.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Location: Anywhere"].exists)
+    }
+
     func testClearingAnEmptySearchRestoresDiscovery() {
         let app = launch(routes: [
             route(query: ["query": "no-match"], body: page([])),

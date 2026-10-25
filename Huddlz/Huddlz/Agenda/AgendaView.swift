@@ -19,7 +19,7 @@ struct AgendaView: View {
                             .foregroundStyle(.secondary)
                     }
                     SignedInContent(title: "Sign in to see your agenda", symbol: "calendar",
-                                    description: "Your RSVPs and waitlists, by date.") {
+                                    description: "Huddlz you RSVP to show up here, soonest first.") {
                         // One view, so the day cards share the stack's spacing and the sign-in sheet attaches once.
                         VStack(alignment: .leading, spacing: 20) { list }
                     }
@@ -111,10 +111,14 @@ private struct AgendaRow: View {
 
     private var huddl: Huddl { entry.huddl }
     private var time: String { "\(huddl.startClock) \(huddl.timeZoneLabel)" }
+    /// The venue's name, the part of the address before its first comma; the huddl page has the rest.
+    private var venue: String {
+        huddl.location.split(separator: ",").first.map { $0.trimmingCharacters(in: .whitespaces) } ?? huddl.location
+    }
 
     var body: some View {
+        // The day heading above the card carries the date, so the row gives its width to the title.
         HStack(spacing: 12) {
-            DateStamp(date: huddl.attributes.startsAt, timeZone: huddl.timeZone)
             VStack(alignment: .leading, spacing: 3) {
                 Text(huddl.title).font(.headline)
                 // The meta line stacks at larger text sizes instead of squeezing the location.
@@ -122,11 +126,11 @@ private struct AgendaRow: View {
                     HStack(spacing: 8) {
                         Text(time)
                         Circle().fill(.tertiary).frame(width: 3, height: 3)
-                        Text(huddl.location).lineLimit(1)
+                        Text(venue).lineLimit(1)
                     }
                     VStack(alignment: .leading, spacing: 2) {
                         Text(time)
-                        Text(huddl.location).lineLimit(2)
+                        Text(venue).lineLimit(2)
                     }
                 }
                 .font(.footnote)

@@ -47,6 +47,22 @@ final class TabsUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Welcome back"].waitForExistence(timeout: 5))
     }
 
+    func testSignedOutTabsSayWhatFillsThemWithoutRepeatingTheHeader() {
+        let app = launch()
+        XCTAssertTrue(app.tabBars.buttons["Agenda"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["Agenda"].tap()
+        XCTAssertTrue(app.staticTexts["Sign in to see your agenda"].waitForExistence(timeout: 5))
+        let subtitle = app.staticTexts.matching(NSPredicate(format: "label == %@", "Your RSVPs and waitlists, by date."))
+        XCTAssertEqual(subtitle.count, 1)
+        // The prompt's one action is easy to hit: it spans most of the screen.
+        XCTAssertGreaterThan(app.buttons["Sign in"].frame.width, app.windows.firstMatch.frame.width / 2)
+
+        app.tabBars.buttons["Groups"].tap()
+        XCTAssertTrue(app.staticTexts["Sign in to see your groups"].waitForExistence(timeout: 5))
+        // The groups list shows names and places, so the prompt promises nothing more.
+        XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "next huddlz")).firstMatch.exists)
+    }
+
     func testSignedInAgendaAndGroupsDoNotAskToSignIn() {
         let app = launch(savedSession: true)
         XCTAssertTrue(app.tabBars.buttons["Agenda"].waitForExistence(timeout: 5))

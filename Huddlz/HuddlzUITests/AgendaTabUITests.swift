@@ -32,6 +32,18 @@ final class AgendaTabUITests: XCTestCase {
         XCTAssertTrue(hikeRow.waitForExistence(timeout: 5))
     }
 
+    func testAgendaRowsNameTheVenueAndLeaveTheDateToTheDayHeading() {
+        let venue = coffee.replacingOccurrences(of: "Juniper Café", with: "Juniper Café, 12 Elm Street, Austin, TX, USA")
+        let app = launch(agendaResponses: [["status": 200, "body": page([venue])]])
+        openAgenda(app)
+        let row = app.buttons["agenda-coffee"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Monday, September 14"].exists)
+        XCTAssertTrue(row.label.contains("Juniper Café"), row.label)
+        XCTAssertFalse(row.label.contains("Elm Street"), row.label)
+        XCTAssertFalse(row.label.contains("Sep 14"), row.label)
+    }
+
     func testAgendaHeaderOpensTheAccountSheet() {
         let app = launch(agendaResponses: [["status": 200, "body": page([coffee])]])
         openAgenda(app)
