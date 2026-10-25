@@ -62,7 +62,7 @@ final class UITestHTTPService {
 }
 
 /// AsyncImage keeps its real loader; only its external HTTP response is replaced.
-private final class UITestImageURLProtocol: URLProtocol, @unchecked Sendable {
+nonisolated private final class UITestImageURLProtocol: URLProtocol, @unchecked Sendable {
     private var loadingTask: Task<Void, Never>?
 
     override class func canInit(with request: URLRequest) -> Bool { true }

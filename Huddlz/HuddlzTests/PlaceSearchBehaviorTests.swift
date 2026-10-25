@@ -79,8 +79,9 @@ struct PlaceSearchBehaviorTests {
 
 @MainActor
 private final class PendingPlaces {
-    private var response: CheckedContinuation<[MKMapItem], Never>?
+    private var response: CheckedContinuation<Void, Never>?
     private var started: CheckedContinuation<Void, Never>?
+    private var places: [MKMapItem] = []
 
     func fetch() async -> [MKMapItem] {
         await withCheckedContinuation {
@@ -88,6 +89,7 @@ private final class PendingPlaces {
             started?.resume()
             started = nil
         }
+        return places
     }
 
     func waitUntilRequested() async {
@@ -96,7 +98,8 @@ private final class PendingPlaces {
     }
 
     func finish(_ places: [MKMapItem]) {
-        response?.resume(returning: places)
+        self.places = places
+        response?.resume()
         response = nil
     }
 }
