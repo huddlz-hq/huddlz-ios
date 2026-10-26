@@ -33,6 +33,16 @@ final class GroupUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Bring a mug."].waitForExistence(timeout: 5))
     }
 
+    func testTheGroupsNameMovesIntoTheBarOnceItsTitleScrollsAway() {
+        let app = launch(groupResponses: [["status": 200, "body": group]], huddlz: page([walk, walk.replacingOccurrences(of: "\"walk\"", with: "\"stroll\"")]))
+        openHost(app)
+        XCTAssertTrue(app.staticTexts["Neighbors who love getting outside."].waitForExistence(timeout: 5))
+        let barTitle = app.navigationBars.staticTexts["Juniper Neighbors"]
+        XCTAssertFalse(barTitle.exists)
+        app.swipeUp()
+        XCTAssertTrue(barTitle.waitForExistence(timeout: 5))
+    }
+
     func testAGroupWithNoUpcomingHuddlzExplainsTheEmptyList() {
         let app = launch(groupResponses: [["status": 200, "body": group]], huddlz: page([]))
         openHost(app)

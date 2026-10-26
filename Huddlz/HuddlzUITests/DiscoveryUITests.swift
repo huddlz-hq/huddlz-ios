@@ -30,7 +30,7 @@ final class DiscoveryUITests: DiscoveryUITestCase {
         """
         let app = launch(routes: [
             route(body: page([coffee])),
-            route(path: "/api/json/huddlz/coffee", query: ["include": "group", "fields[group]": "name"], body: detail),
+            route(path: "/api/json/huddlz/coffee", query: ["include": "group", "fields[group]": "name,slug"], body: detail),
             route(path: "/api/json/huddlz/coffee", body: "{\"data\":\(coffee)}")
         ])
         XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
@@ -78,7 +78,8 @@ final class DiscoveryUITests: DiscoveryUITestCase {
         XCTAssertFalse(app.searchFields.firstMatch.exists)
         XCTAssertTrue(app.staticTexts["Bring a mug and meet your neighbors."].exists)
         XCTAssertTrue(app.staticTexts["Juniper Café"].exists)
-        XCTAssertTrue(app.staticTexts["America/New_York"].exists)
+        // The zone is named in everyday words, and only when it differs from the phone's (see HuddlPageUITests).
+        XCTAssertFalse(app.staticTexts["America/New_York"].exists)
         // The date card names the day, then the range in the event's zone; a later end day is spelled out.
         XCTAssertTrue(app.staticTexts["Thursday, September 10"].exists)
         let range = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "9:00")).firstMatch

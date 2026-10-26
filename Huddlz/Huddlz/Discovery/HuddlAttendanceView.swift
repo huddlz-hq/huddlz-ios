@@ -15,7 +15,7 @@ enum AttendanceState: String, Decodable {
         switch self {
         case .confirmed: "checkmark.circle.fill"
         case .waitlisted: "clock"
-        case .none: "calendar.badge.questionmark"
+        case .none: "calendar"
         }
     }
 }
@@ -46,27 +46,26 @@ struct HuddlAttendanceView: View {
                             action(for: attendance)
                         }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                    .surfaceCard()
+                    .barPanel()
                 } else if status.loadedUserID == user.id, status.loadFailed {
-                    VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 12) {
                         Text("Couldn’t check your RSVP.").foregroundStyle(.secondary)
+                        Spacer(minLength: 8)
                         Button("Try checking RSVP again") { retry = UUID() }.buttonStyle(.glass)
                     }
+                    .barPanel()
                 } else {
-                    ProgressView("Checking your RSVP…")
+                    ProgressView("Checking your RSVP…").barPanel()
                 }
             } else if !acceptsChanges {
-                Text("RSVPs are closed for this huddl.").foregroundStyle(.secondary)
+                Text("RSVPs are closed for this huddl.").foregroundStyle(.secondary).barPanel()
             } else {
                 Button { showsAccount = true } label: {
                     Text("Sign in to RSVP").frame(maxWidth: .infinity, minHeight: 32)
                 }
                 .buttonStyle(.glassProminent)
             }
-            if let actionError = status.actionError { Text(actionError).foregroundStyle(.secondary) }
+            if let actionError = status.actionError { Text(actionError).font(.footnote).foregroundStyle(.secondary) }
         }
         .sheet(isPresented: $showsAccount) { AccountView() }
         .task(id: RequestID(userID: account.user?.id, phase: scenePhase, retry: retry)) {
@@ -122,4 +121,14 @@ struct HuddlAttendanceView: View {
         let retry: UUID
     }
 
+}
+
+private extension View {
+    /// The RSVP row floats over the page, so it sits on glass rather than a card.
+    func barPanel() -> some View {
+        padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .glassEffect(.regular, in: .rect(cornerRadius: HuddlStyle.cardRadius))
+    }
 }
