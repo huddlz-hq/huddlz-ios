@@ -66,8 +66,9 @@ struct HuddlCard: View {
     @ViewBuilder private var tag: some View {
         Group {
             if let badge {
+                // Waitlisted takes the warm tone, as on the agenda.
                 Label(badge == .confirmed ? "Going" : "Waitlisted", systemImage: badge.symbol)
-                    .foregroundStyle(HuddlStyle.accent)
+                    .foregroundStyle(badge == .confirmed ? HuddlStyle.accent : HuddlStyle.hybrid)
             } else {
                 HStack(spacing: 6) {
                     Circle().frame(width: 6, height: 6)

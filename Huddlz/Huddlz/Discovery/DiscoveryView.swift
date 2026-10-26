@@ -36,13 +36,26 @@ struct DiscoveryView: View {
                     Text("Find a huddl worth showing up to.")
                         .foregroundStyle(.secondary)
                 }
-                locationFilter
                 filters
+                if !preferences.query.text.isEmpty { searchSummary }
                 results
             }
             .padding(20)
             .frame(maxWidth: 640)
             .frame(maxWidth: .infinity)
+        }
+        // With the navigation bar hidden, nothing separates the status bar from scrolled cards; fade them out under it.
+        .overlay(alignment: .top) {
+            if horizontalSizeClass == .compact {
+                GeometryReader { proxy in
+                    LinearGradient(colors: [HuddlStyle.background, HuddlStyle.background.opacity(0)],
+                                   startPoint: .top, endPoint: .bottom)
+                        .frame(height: proxy.safeAreaInsets.top + 16)
+                        .ignoresSafeArea(edges: .top)
+                }
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
         }
         .background { AmbientBackground() }
         .background { SearchBadgeLoader(store: badges, huddlIDs: visibleHuddlIDs, refresh: badgeRefresh) }
@@ -61,46 +74,58 @@ struct DiscoveryView: View {
         badgeRefresh = UUID()
     }
 
-    // Filters are glass chips; a chosen location keeps the accent so the active filter stands out.
-    private var locationFilter: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Button { isChoosingLocation = true } label: {
-                Label(preferences.query.place?.name ?? "Anywhere", systemImage: "mappin.and.ellipse")
-                    .multilineTextAlignment(.leading)
-                    .frame(minHeight: 32)
-            }
-            .foregroundStyle(preferences.query.place == nil ? Color.primary : HuddlStyle.accent)
-            .accessibilityLabel("Location: \(preferences.query.place?.name ?? "Anywhere")")
-            if preferences.query.place != nil {
-                GlassEffectContainer(spacing: 8) {
-                    HStack(spacing: 8) {
-                        Menu {
-                            Picker("Distance", selection: $preferences.query.distanceMiles) {
-                                ForEach([5, 10, 25, 50, 100], id: \.self) { miles in
-                                    Text("\(miles) miles").tag(miles)
-                                }
-                            }
-                        } label: {
-                            Text("Within \(preferences.query.distanceMiles) miles").frame(minHeight: 32)
-                        }
-                        .accessibilityLabel("Distance: \(preferences.query.distanceMiles) miles")
-                        Button("Clear location") { preferences.selectPlace(nil) }
-                            .frame(minHeight: 32)
-                    }
+    // Filters are glass chips in one row that scrolls sideways; a chosen filter keeps the accent so it stands out.
+    private var filters: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            GlassEffectContainer(spacing: 8) {
+                HStack(spacing: 8) {
+                    locationFilter
+                    dateFilter
+                    typeFilter
                 }
             }
+            .buttonStyle(.glass)
         }
-        .buttonStyle(.glass)
+        .scrollClipDisabled()
     }
 
-    private var filters: some View {
-        GlassEffectContainer(spacing: 8) {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) { dateFilter; typeFilter }
-                VStack(alignment: .leading, spacing: 8) { dateFilter; typeFilter }
-            }
+    @ViewBuilder private var locationFilter: some View {
+        Button { isChoosingLocation = true } label: {
+            Label(preferences.query.place?.name ?? "Anywhere", systemImage: "mappin.and.ellipse")
+                .lineLimit(1)
+                .frame(minHeight: 32)
         }
-        .buttonStyle(.glass)
+        .foregroundStyle(preferences.query.place == nil ? Color.primary : HuddlStyle.accent)
+        .accessibilityLabel("Location: \(preferences.query.place?.name ?? "Anywhere")")
+        if preferences.query.place != nil {
+            Menu {
+                Picker("Distance", selection: $preferences.query.distanceMiles) {
+                    ForEach([5, 10, 25, 50, 100], id: \.self) { miles in
+                        Text("\(miles) miles").tag(miles)
+                    }
+                }
+            } label: {
+                Text("Within \(preferences.query.distanceMiles) miles").frame(minHeight: 32)
+            }
+            .accessibilityLabel("Distance: \(preferences.query.distanceMiles) miles")
+            Button("Clear location") { preferences.selectPlace(nil) }
+                .frame(minHeight: 32)
+        }
+    }
+
+    /// Once the keyboard closes the search field can minimize, so the results say what they match.
+    private var searchSummary: some View {
+        HStack(spacing: 12) {
+            Text("Results for “\(preferences.query.text)”")
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            Button("Clear search") {
+                searchText = ""
+                preferences.query.text = ""
+            }
+            .font(.subheadline)
+        }
     }
 
     private var dateFilter: some View {

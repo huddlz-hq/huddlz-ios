@@ -88,6 +88,35 @@ final class DiscoveryUITests: DiscoveryUITestCase {
         XCTAssertEqual(app.searchFields.firstMatch.value as? String, "coffee")
     }
 
+    func testFiltersShareOneRowAboveTheCards() {
+        let app = launch(routes: [route(body: page([coffee, hike]))])
+        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
+        let location = app.buttons["Location: Anywhere"].frame
+        let when = app.buttons["When: All upcoming"].frame
+        let type = app.buttons["Event type: All types"].frame
+        XCTAssertEqual(location.midY, when.midY, accuracy: 1)
+        XCTAssertEqual(when.midY, type.midY, accuracy: 1)
+        XCTAssertLessThan(type.maxY, app.buttons["huddl-coffee"].frame.minY)
+    }
+
+    func testASubmittedSearchIsNamedAboveTheResultsAndCanBeClearedThere() {
+        let app = launch(routes: [
+            route(query: ["query": "coffee"], body: page([coffee])),
+            route(body: page([coffee, hike]))
+        ])
+        XCTAssertTrue(app.buttons["huddl-hike"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Results for “coffee”"].exists)
+        app.searchFields.firstMatch.tap()
+        app.searchFields.firstMatch.typeText("coffee\n")
+        XCTAssertTrue(app.staticTexts["Results for “coffee”"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["huddl-hike"].waitForNonExistence(timeout: 5))
+
+        app.buttons["Clear search"].tap()
+        XCTAssertTrue(app.buttons["huddl-hike"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Results for “coffee”"].exists)
+        XCTAssertNotEqual(app.searchFields.firstMatch.value as? String, "coffee")
+    }
+
     func testClearingAnEmptySearchRestoresDiscovery() {
         let app = launch(routes: [
             route(query: ["query": "no-match"], body: page([])),
