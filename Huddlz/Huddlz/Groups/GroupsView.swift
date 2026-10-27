@@ -19,7 +19,7 @@ struct GroupsView: View {
                             .foregroundStyle(.secondary)
                     }
                     SignedInContent(title: "Sign in to see your groups", symbol: "person.2",
-                                    description: "The groups you belong to, and their next huddlz.") {
+                                    description: "Groups you join show up here.") {
                         // One view, so the list shares the stack's spacing and the sign-in sheet attaches once.
                         VStack(alignment: .leading, spacing: 20) { list }
                     }

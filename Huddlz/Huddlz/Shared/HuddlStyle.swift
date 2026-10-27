@@ -161,7 +161,8 @@ struct BrandHeader: View {
     }
 }
 
-/// A square tile with the group's initial in the accent, standing in for group artwork.
+/// A square tile with the group's initial, standing in for group artwork. Each name keeps one tint from
+/// the brand palette, so neighboring groups are easy to tell apart.
 struct GroupTile: View {
     let name: String
     var size: CGFloat = 48
@@ -169,10 +170,17 @@ struct GroupTile: View {
     var body: some View {
         Text(initial)
             .font(.system(size: size * 0.42, weight: .heavy, design: .rounded))
-            .foregroundStyle(HuddlStyle.accent)
+            .foregroundStyle(tint)
             .frame(width: size, height: size)
-            .background(HuddlStyle.accent.opacity(0.12), in: .rect(cornerRadius: size * 0.29))
+            .background(tint.opacity(0.14), in: .rect(cornerRadius: size * 0.29))
             .accessibilityHidden(true)
+    }
+
+    private var tint: Color {
+        let palette = [HuddlStyle.accent, HuddlStyle.online, HuddlStyle.hybrid, Color.indigo, Color.green]
+        // A stable sum of the name's characters, since Swift's hash values change between launches.
+        let sum = name.unicodeScalars.reduce(0) { $0 + Int($1.value) }
+        return palette[sum % palette.count]
     }
 
     private var initial: String {
