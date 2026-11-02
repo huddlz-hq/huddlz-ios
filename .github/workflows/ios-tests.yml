@@ -16,11 +16,11 @@ concurrency:
 
 jobs:
   latest-toolchain:
-    name: Xcode 27.1 compiler compatibility
+    name: Xcode 27.2 compiler compatibility
     runs-on: xcode-27
     timeout-minutes: 20
     env:
-      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
     steps:
       - uses: actions/checkout@v7
         with:
@@ -29,8 +29,8 @@ jobs:
       - name: Verify stable toolchain
         run: |
           xcodebuild -version
-          test "$(xcodebuild -version | head -1)" = "Xcode 27.1"
-          test "$(xcodebuild -version | tail -1)" = "Build version 27A9275"
+          test "$(xcodebuild -version | head -1)" = "Xcode 27.2"
+          test "$(xcodebuild -version | tail -1)" = "Build version 27B52"
 
       - name: Build all test targets
         run: |
