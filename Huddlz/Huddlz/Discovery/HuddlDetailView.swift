@@ -177,9 +177,7 @@ struct HuddlDetailView: View {
     }
 
     @ViewBuilder private func location(_ huddl: Huddl) -> some View {
-        if huddl.attributes.eventType != .virtual,
-           let address = huddl.attributes.physicalLocation?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !address.isEmpty {
+        if let address = huddl.mapAddress {
             HuddlLocationView(address: address).id(address)
         } else {
             Label(huddl.location, systemImage: huddl.attributes.eventType == .virtual ? "video" : "mappin.and.ellipse")

@@ -25,6 +25,33 @@ struct AccountBehaviorTests {
         #expect(submitted)
     }
 
+    @Test("A failed reset request explains the problem and can be retried", arguments: [
+        (503, "Couldn’t request a reset link. Check your connection and try again."),
+        (429, "Too many requests. Please try again later."),
+        (-1, "Couldn’t request a reset link. Check your connection and try again.")
+    ])
+    func failedResetCanRetry(status: Int, message: String) async {
+        var attempts = 0
+        let reset = PasswordResetRequest(client: AccountClient { request in
+            attempts += 1
+            if attempts == 1 {
+                if status < 0 { throw URLError(.notConnectedToInternet) }
+                return HTTPFixture.response(request, body: "{}", status: status)
+            }
+            return HTTPFixture.response(request, body: "", status: 204)
+        })
+        #expect(!reset.canSend(email: "  "))
+        await reset.send(email: "neighbor@example.com")
+        #expect(reset.errorMessage == message)
+        #expect(!reset.didRequestReset)
+        #expect(reset.canSend(email: "neighbor@example.com"))
+        await reset.send(email: "neighbor@example.com")
+        #expect(reset.errorMessage == nil)
+        #expect(reset.didRequestReset)
+        #expect(!reset.canSend(email: "neighbor@example.com"))
+        #expect(attempts == 2)
+    }
+
     @Test("Sign-out removes the saved login before server revocation, even offline", arguments: [204, 401, 503, -1])
     func signOutClearsLocalSession(status: Int) async throws {
         let tokens = SessionTokenStore(service: "com.huddlz.tests.\(UUID())")

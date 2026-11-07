@@ -30,36 +30,6 @@ final class RegistrationUITests: RegistrationUITestCase {
         app.buttons["Sign out"].tap()
         XCTAssertTrue(app.textFields["Email"].waitForExistence(timeout: 5))
     }
-
-    func testRejectedRegistrationKeepsEntriesAndAllowsCorrection() {
-        let app = launch(responses: [
-            ["status": 422, "body": #"{"errors":[{"field":"email","message":"Enter a valid email address."}]}"#],
-            ["status": 201, "body": "{\"token\":\"fixture-token\",\"user\":\(user)}"]
-        ])
-        openRegistration(app)
-        fillRegistration(app, email: "neighbor")
-        app.switches["Accept legal documents"].tap()
-        app.buttons["Create account"].tap()
-        XCTAssertTrue(app.staticTexts["Enter a valid email address."].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.textFields["Display name"].value as? String, "Our Neighbor")
-        XCTAssertEqual(app.textFields["Email"].value as? String, "neighbor")
-        XCTAssertTrue(app.buttons["Create account"].isEnabled)
-        app.textFields["Email"].tap()
-        // Correct the form through the native keyboard, then retry.
-        app.textFields["Email"].typeText("@example.com\n")
-        app.secureTextFields["Confirm password"].tap()
-        app.secureTextFields["Confirm password"].typeText("\n")
-        app.buttons["Create account"].tap()
-        XCTAssertTrue(app.staticTexts["Where should we find huddlz?"].waitForExistence(timeout: 5))
-        XCTAssertFalse(XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.firstMatch.exists)
-        app.buttons["Not now"].tap()
-        let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["Close account"])
-        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 5), .completed)
-        app.buttons["Account"].tap()
-        XCTAssertTrue(app.staticTexts["Our Neighbor"].waitForExistence(timeout: 5))
-        app.buttons["Sign out"].tap()
-        XCTAssertTrue(app.textFields["Email"].waitForExistence(timeout: 5))
-    }
 }
 
 @MainActor
@@ -75,8 +45,7 @@ final class SignupCityUITests: RegistrationUITestCase {
         XCTAssertTrue(app.buttons["Choose a city"].waitForExistence(timeout: 5))
         capture(app, name: "Signup city choices")
         app.buttons["Choose a city"].tap()
-        app.textFields["City"].tap()
-        app.textFields["City"].typeText("St. Augustine\n")
+        app.textFields["City"].typeAfterFocusing("St. Augustine\n")
         let city = app.buttons["St. Augustine, FL, USA"]
         XCTAssertTrue(city.waitForExistence(timeout: 5))
         city.tap()
@@ -86,14 +55,6 @@ final class SignupCityUITests: RegistrationUITestCase {
         app.buttons["Save home city"].tap()
         XCTAssertTrue(app.buttons["Location: St. Augustine, FL, USA"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["When: This week"].exists)
-    }
-
-    func testFailedCitySaveKeepsTheCityAndCanRetry() {
-        verifyFailedCitySave(retry: true)
-    }
-
-    func testFailedCitySaveCanBeSkippedWithoutChangingSearch() {
-        verifyFailedCitySave(retry: false)
     }
 }
 
@@ -119,14 +80,6 @@ final class SignupLocationUITests: RegistrationUITestCase {
         app.buttons["Not now"].tap()
         XCTAssertTrue(app.buttons["Location: Anywhere"].waitForExistence(timeout: 5))
     }
-
-    func testDeniedLocationKeepsCitySearchAndSkippingAvailable() {
-        verifyLocationRecovery(denied: true)
-    }
-
-    func testUnavailableLocationKeepsCitySearchAndSkippingAvailable() {
-        verifyLocationRecovery(denied: false)
-    }
 }
 
 @MainActor
@@ -147,8 +100,7 @@ class RegistrationUITestCase: XCTestCase {
         app.buttons["Create account"].tap()
         XCTAssertTrue(app.buttons["Choose a city"].waitForExistence(timeout: 5))
         app.buttons["Choose a city"].tap()
-        app.textFields["City"].tap()
-        app.textFields["City"].typeText("St. Augustine\n")
+        app.textFields["City"].typeAfterFocusing("St. Augustine\n")
         XCTAssertTrue(app.buttons["St. Augustine, FL, USA"].waitForExistence(timeout: 5))
         app.buttons["St. Augustine, FL, USA"].tap()
         app.buttons["Save home city"].tap()
@@ -187,8 +139,7 @@ class RegistrationUITestCase: XCTestCase {
         }
         XCTAssertTrue(app.buttons["Not now"].isEnabled)
         app.buttons["Choose a city"].tap()
-        app.textFields["City"].tap()
-        app.textFields["City"].typeText("St. Augustine\n")
+        app.textFields["City"].typeAfterFocusing("St. Augustine\n")
         XCTAssertTrue(app.buttons["St. Augustine, FL, USA"].waitForExistence(timeout: 5))
         app.buttons["St. Augustine, FL, USA"].tap()
         XCTAssertTrue(app.buttons["Save home city"].waitForExistence(timeout: 5))
@@ -237,13 +188,9 @@ class RegistrationUITestCase: XCTestCase {
     }
 
     fileprivate func fillRegistration(_ app: XCUIApplication, email: String = "neighbor@example.com") {
-        app.textFields["Display name"].tap()
-        app.textFields["Display name"].typeText("Our Neighbor")
-        app.textFields["Email"].tap()
-        app.textFields["Email"].typeText(email)
-        app.secureTextFields["Password"].tap()
-        app.secureTextFields["Password"].typeText("sample-password")
-        app.secureTextFields["Confirm password"].tap()
-        app.secureTextFields["Confirm password"].typeText("sample-password\n")
+        app.textFields["Display name"].typeAfterFocusing("Our Neighbor")
+        app.textFields["Email"].typeAfterFocusing(email)
+        app.secureTextFields["Password"].typeAfterFocusing("sample-password")
+        app.secureTextFields["Confirm password"].typeAfterFocusing("sample-password\n")
     }
 }

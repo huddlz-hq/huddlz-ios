@@ -20,6 +20,13 @@ enum AttendanceState: String, Decodable {
     }
 }
 
+/// RSVPs open only while a huddl is published and hasn't ended.
+enum RSVPWindow {
+    static func isOpen(lifecycleState: String, endsAt: Date, now: Date = .now) -> Bool {
+        lifecycleState == "published" && endsAt > now
+    }
+}
+
 struct HuddlAttendanceView: View {
     let id: String
     let lifecycleState: String
@@ -113,7 +120,7 @@ struct HuddlAttendanceView: View {
         Task { await status.change(huddlID: id, action: action, account: account) }
     }
 
-    private var acceptsChanges: Bool { lifecycleState == "published" && endsAt > Date.now }
+    private var acceptsChanges: Bool { RSVPWindow.isOpen(lifecycleState: lifecycleState, endsAt: endsAt) }
 
     private struct RequestID: Equatable {
         let userID: String?
