@@ -13,8 +13,11 @@ struct SignInPrompt: View {
         } description: {
             Text(description)
         } actions: {
-            Button("Sign in", action: signIn)
-                .buttonStyle(.glassProminent)
+            Button(action: signIn) {
+                Text("Sign in").frame(minWidth: 240)
+            }
+            .buttonStyle(.glassProminent)
+            .controlSize(.large)
         }
     }
 }

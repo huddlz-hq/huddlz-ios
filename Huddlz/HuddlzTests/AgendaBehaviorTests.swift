@@ -33,6 +33,19 @@ struct AgendaBehaviorTests {
         #expect(store.days.last?.entries.first?.attendance == .waitlisted)
     }
 
+    @Test("Agenda rows name the venue, not the whole street address", arguments: [
+        ("Juniper Café, 12 Elm Street, Austin, TX, USA", "Juniper Café"),
+        ("Juniper Café", "Juniper Café")
+    ])
+    func agendaRowsNameTheVenue(address: String, venue: String) async throws {
+        let event = HTTPFixture.coffee.replacingOccurrences(of: "Juniper Café", with: address)
+        let client = DiscoveryClient { request in
+            HTTPFixture.response(request, body: "{\"data\":\(event)}")
+        }
+        let huddl = try await client.detail(id: "coffee")
+        #expect(huddl.venueName == venue)
+    }
+
     @Test("The agenda stays soonest first when a local date repeats across time zones")
     func agendaKeepsChronologicalOrderAcrossTimeZones() async {
         let tokens = SessionTokenStore(service: "com.huddlz.tests.\(UUID())")

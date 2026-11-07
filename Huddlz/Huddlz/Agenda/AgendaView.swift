@@ -19,7 +19,7 @@ struct AgendaView: View {
                             .foregroundStyle(.secondary)
                     }
                     SignedInContent(title: "Sign in to see your agenda", symbol: "calendar",
-                                    description: "Your RSVPs and waitlists, by date.") {
+                                    description: "When you RSVP to a huddl, it shows up here.") {
                         // One view, so the day cards share the stack's spacing and the sign-in sheet attaches once.
                         VStack(alignment: .leading, spacing: 20) { list }
                     }
@@ -113,8 +113,8 @@ private struct AgendaRow: View {
     private var time: String { "\(huddl.startClock) \(huddl.timeZoneLabel)" }
 
     var body: some View {
+        // The day heading above the card carries the date, so the row gives its width to the title.
         HStack(spacing: 12) {
-            DateStamp(date: huddl.attributes.startsAt, timeZone: huddl.timeZone)
             VStack(alignment: .leading, spacing: 3) {
                 Text(huddl.title).font(.headline)
                 // The meta line stacks at larger text sizes instead of squeezing the location.
@@ -122,11 +122,11 @@ private struct AgendaRow: View {
                     HStack(spacing: 8) {
                         Text(time)
                         Circle().fill(.tertiary).frame(width: 3, height: 3)
-                        Text(huddl.location).lineLimit(1)
+                        Text(huddl.venueName).lineLimit(1)
                     }
                     VStack(alignment: .leading, spacing: 2) {
                         Text(time)
-                        Text(huddl.location).lineLimit(2)
+                        Text(huddl.venueName).lineLimit(2)
                     }
                 }
                 .font(.footnote)
