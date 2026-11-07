@@ -19,7 +19,7 @@ struct AgendaView: View {
                             .foregroundStyle(.secondary)
                     }
                     SignedInContent(title: "Sign in to see your agenda", symbol: "calendar",
-                                    description: "Huddlz you RSVP to show up here, soonest first.") {
+                                    description: "When you RSVP to a huddl, it shows up here.") {
                         // One view, so the day cards share the stack's spacing and the sign-in sheet attaches once.
                         VStack(alignment: .leading, spacing: 20) { list }
                     }
