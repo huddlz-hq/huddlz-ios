@@ -77,7 +77,8 @@ struct HuddlArtwork: View {
     private var tint: Color { fullBleed ? huddl.attributes.eventType.tint : HuddlStyle.accent }
 }
 
-/// A 48-point glass tile with the month over the day, as on the web app's cards.
+/// A 48-point tile with the month over the day, as on the web app's cards. It is solid rather than glass
+/// so it stays readable over busy cover art.
 struct DateStamp: View {
     let date: Date
     let timeZone: TimeZone
@@ -92,7 +93,9 @@ struct DateStamp: View {
                 .font(.system(size: 18, weight: .bold))
         }
         .frame(width: 48, height: 48)
-        .glassEffect(.regular, in: .rect(cornerRadius: 12))
+        .background(HuddlStyle.surface, in: .rect(cornerRadius: 12))
+        .overlay { RoundedRectangle(cornerRadius: 12).strokeBorder(.quaternary) }
+        .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(date.formatted(style.month(.abbreviated).day()))
     }
