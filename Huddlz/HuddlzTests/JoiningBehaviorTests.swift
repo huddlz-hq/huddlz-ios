@@ -46,4 +46,43 @@ struct JoiningBehaviorTests {
         #expect(account.user == nil)
     }
 
+    private static func link(_ value: String?) -> String {
+        let link = value.map { "\"\($0)\"" } ?? "null"
+        return #"{"data":{"id":"coffee","attributes":{"visible_virtual_link":\#(link)}}}"#
+    }
+
+    @Test("A failed joining request can be retried", arguments: [503, -1])
+    func failedJoiningCanRetry(status: Int) async throws {
+        let tokens = SessionTokenStore(service: "com.huddlz.tests.\(UUID())")
+        defer { Task { try? await tokens.clear() } }
+        var attempts = 0
+        let account = AccountStore(client: AccountClient { request in
+            guard request.url?.path == "/api/json/huddlz/coffee" else { return HTTPFixture.response(request, body: Self.session) }
+            attempts += 1
+            if attempts == 1 {
+                if status < 0 { throw URLError(.notConnectedToInternet) }
+                return HTTPFixture.response(request, body: "{}", status: status)
+            }
+            return HTTPFixture.response(request, body: Self.link("https://example.com/huddl-room"))
+        }, tokens: tokens)
+        await account.signIn(email: "neighbor@example.com", password: "sample-password")
+        await #expect(throws: (any Error).self) { try await account.joiningLink(huddlID: "coffee") }
+        #expect(account.user?.id == "neighbor")
+        #expect(try await account.joiningLink(huddlID: "coffee") == URL(string: "https://example.com/huddl-room"))
+    }
+
+    @Test("Losing access removes the joining link")
+    func lostAccessRemovesLink() async throws {
+        let tokens = SessionTokenStore(service: "com.huddlz.tests.\(UUID())")
+        defer { Task { try? await tokens.clear() } }
+        var visible: String? = "https://example.com/huddl-room"
+        let account = AccountStore(client: AccountClient { request in
+            HTTPFixture.response(request, body: request.url?.path == "/api/json/huddlz/coffee" ? Self.link(visible) : Self.session)
+        }, tokens: tokens)
+        await account.signIn(email: "neighbor@example.com", password: "sample-password")
+        #expect(try await account.joiningLink(huddlID: "coffee") != nil)
+        visible = nil
+        #expect(try await account.joiningLink(huddlID: "coffee") == nil)
+    }
+
 }
