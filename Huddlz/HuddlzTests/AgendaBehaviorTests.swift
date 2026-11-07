@@ -79,4 +79,74 @@ struct AgendaBehaviorTests {
         #expect(store.loadedUserID == nil)
         #expect(!store.loadFailed)
     }
+
+    @Test("An empty agenda loads without an error")
+    func emptyAgenda() async {
+        let tokens = SessionTokenStore(service: "com.huddlz.tests.\(UUID())")
+        defer { Task { try? await tokens.clear() } }
+        let account = AccountStore(client: AccountClient { request in
+            guard request.url?.path == "/api/json/huddlz/upcoming" else { return HTTPFixture.response(request, body: Self.session) }
+            return HTTPFixture.response(request, body: #"{"data":[]}"#)
+        }, tokens: tokens)
+        await account.signIn(email: "neighbor@example.com", password: "sample-password")
+        let store = AgendaStore()
+        await store.load(account: account)
+        #expect(store.days.isEmpty)
+        #expect(!store.loadFailed)
+        #expect(store.loadedUserID == "neighbor")
+    }
+
+    @Test("A failed agenda load can be retried", arguments: [503, -1])
+    func failedAgendaCanRetry(status: Int) async {
+        let tokens = SessionTokenStore(service: "com.huddlz.tests.\(UUID())")
+        defer { Task { try? await tokens.clear() } }
+        var attempts = 0
+        let coffee = Self.huddl("coffee", starts: "2099-09-14T13:00:00Z", ends: "2099-09-14T15:00:00Z", zone: "America/New_York", attendance: "confirmed")
+        let account = AccountStore(client: AccountClient { request in
+            guard request.url?.path == "/api/json/huddlz/upcoming" else { return HTTPFixture.response(request, body: Self.session) }
+            attempts += 1
+            if attempts == 1 {
+                if status < 0 { throw URLError(.notConnectedToInternet) }
+                return HTTPFixture.response(request, body: "{}", status: status)
+            }
+            return HTTPFixture.response(request, body: "{\"data\":[\(coffee)]}")
+        }, tokens: tokens)
+        await account.signIn(email: "neighbor@example.com", password: "sample-password")
+        let store = AgendaStore()
+        await store.load(account: account)
+        #expect(store.loadFailed)
+        #expect(store.days.isEmpty)
+        await store.load(account: account)
+        #expect(!store.loadFailed)
+        #expect(store.days.flatMap(\.entries).map(\.id) == ["coffee"])
+    }
+
+    @Test("Cancelling an RSVP removes the huddl when the agenda reloads")
+    func cancelledRSVPLeavesTheAgenda() async {
+        let tokens = SessionTokenStore(service: "com.huddlz.tests.\(UUID())")
+        defer { Task { try? await tokens.clear() } }
+        var cancelled = false
+        let coffee = Self.huddl("coffee", starts: "2099-09-14T13:00:00Z", ends: "2099-09-14T15:00:00Z", zone: "America/New_York", attendance: "confirmed")
+        let account = AccountStore(client: AccountClient { request in
+            switch request.url?.path {
+            case "/api/json/huddlz/upcoming":
+                return HTTPFixture.response(request, body: cancelled ? #"{"data":[]}"# : "{\"data\":[\(coffee)]}")
+            case "/api/json/huddlz/coffee/cancel_rsvp":
+                cancelled = true
+                return HTTPFixture.response(request, body: #"{"data":{"id":"coffee","attributes":{"attendance_state":"none"}}}"#)
+            default:
+                return HTTPFixture.response(request, body: Self.session)
+            }
+        }, tokens: tokens)
+        await account.signIn(email: "neighbor@example.com", password: "sample-password")
+        let agenda = AgendaStore()
+        await agenda.load(account: account)
+        #expect(agenda.days.flatMap(\.entries).map(\.id) == ["coffee"])
+        let rsvp = HuddlAttendanceStore()
+        await rsvp.change(huddlID: "coffee", action: .cancel, account: account)
+        #expect(rsvp.attendance == AttendanceState.none)
+        #expect(rsvp.actionError == nil)
+        await agenda.load(account: account)
+        #expect(agenda.days.isEmpty)
+    }
 }

@@ -1,25 +1,56 @@
 import SwiftUI
+import Observation
+
+/// Requests a password reset link and remembers whether one was sent.
+@MainActor
+@Observable
+final class PasswordResetRequest {
+    private(set) var isSending = false
+    private(set) var didRequestReset = false
+    private(set) var errorMessage: String?
+    private let client: AccountClient
+
+    init(client: AccountClient? = nil) {
+        self.client = client ?? AccountClient()
+    }
+
+    func canSend(email: String) -> Bool {
+        !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isSending && !didRequestReset
+    }
+
+    func send(email: String) async {
+        guard canSend(email: email) else { return }
+        isSending = true
+        errorMessage = nil
+        defer { isSending = false }
+        do {
+            try await client.requestPasswordReset(email: email)
+            didRequestReset = true
+        } catch AccountError.rateLimited {
+            errorMessage = "Too many requests. Please try again later."
+        } catch {
+            errorMessage = "Couldn’t request a reset link. Check your connection and try again."
+        }
+    }
+}
 
 struct PasswordResetView: View {
     @Binding var email: String
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @State private var isSending = false
-    @State private var didRequestReset = false
-    @State private var errorMessage: String?
+    @State private var reset = PasswordResetRequest()
     @FocusState private var isEmailFocused: Bool
-    private let client = AccountClient()
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                SheetHeader(title: didRequestReset ? "Check your email" : "Reset your password",
-                            subtitle: didRequestReset
+                SheetHeader(title: reset.didRequestReset ? "Check your email" : "Reset your password",
+                            subtitle: reset.didRequestReset
                                 ? "If an account exists for this email, we’ll send a reset link."
                                 : "Enter your account email to request a reset link.") {
                     EmptyView()
                 }
-                if didRequestReset {
+                if reset.didRequestReset {
                     Text("Follow the link to choose a new password on huddlz.com, then return here to sign in.")
                         .foregroundStyle(.secondary)
                 } else {
@@ -33,7 +64,7 @@ struct PasswordResetView: View {
                             .submitLabel(.send)
                             .onSubmit { send() }
                             .formFieldWell()
-                            .disabled(isSending)
+                            .disabled(reset.isSending)
                     }
                     Button(action: send) {
                         Text("Send reset link")
@@ -42,13 +73,13 @@ struct PasswordResetView: View {
                     }
                     .buttonStyle(.glassProminent)
                     .disabled(!canSend)
-                    if isSending { ProgressView("Sending…") }
-                    if let errorMessage { Text(errorMessage).foregroundStyle(.secondary) }
+                    if reset.isSending { ProgressView("Sending…") }
+                    if let errorMessage = reset.errorMessage { Text(errorMessage).foregroundStyle(.secondary) }
                 }
                 Button { dismiss() } label: {
                     Text("Back to sign in").sheetLink()
                 }
-                .disabled(isSending)
+                .disabled(reset.isSending)
             }
             .padding(24)
             .padding(.top, 12)
@@ -60,28 +91,14 @@ struct PasswordResetView: View {
         .background(HuddlStyle.background)
         .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.height(440), .large])
         .presentationDragIndicator(.visible)
-        .interactiveDismissDisabled(isSending)
+        .interactiveDismissDisabled(reset.isSending)
     }
 
-    private var canSend: Bool {
-        !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isSending && !didRequestReset
-    }
+    private var canSend: Bool { reset.canSend(email: email) }
 
     private func send() {
         guard canSend else { return }
         isEmailFocused = false
-        isSending = true
-        errorMessage = nil
-        Task {
-            defer { isSending = false }
-            do {
-                try await client.requestPasswordReset(email: email)
-                didRequestReset = true
-            } catch AccountError.rateLimited {
-                errorMessage = "Too many requests. Please try again later."
-            } catch {
-                errorMessage = "Couldn’t request a reset link. Check your connection and try again."
-            }
-        }
+        Task { await reset.send(email: email) }
     }
 }

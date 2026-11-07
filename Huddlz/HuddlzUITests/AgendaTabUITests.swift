@@ -32,61 +32,6 @@ final class AgendaTabUITests: XCTestCase {
         XCTAssertTrue(hikeRow.waitForExistence(timeout: 5))
     }
 
-    func testAgendaRowsNameTheVenueAndLeaveTheDateToTheDayHeading() {
-        let venue = coffee.replacingOccurrences(of: "Juniper Café", with: "Juniper Café, 12 Elm Street, Austin, TX, USA")
-        let app = launch(agendaResponses: [["status": 200, "body": page([venue])]])
-        openAgenda(app)
-        let row = app.buttons["agenda-coffee"]
-        XCTAssertTrue(row.waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Monday, September 14"].exists)
-        XCTAssertTrue(row.label.contains("Juniper Café"), row.label)
-        XCTAssertFalse(row.label.contains("Elm Street"), row.label)
-        XCTAssertFalse(row.label.contains("Sep 14"), row.label)
-    }
-
-    func testAgendaHeaderOpensTheAccountSheet() {
-        let app = launch(agendaResponses: [["status": 200, "body": page([coffee])]])
-        openAgenda(app)
-        XCTAssertTrue(app.buttons["agenda-coffee"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["One huddl coming up."].exists)
-        app.buttons["Account"].tap()
-        XCTAssertTrue(app.staticTexts["Our Neighbor"].waitForExistence(timeout: 5))
-    }
-
-    func testEmptyAgendaPointsToDiscover() {
-        let app = launch(agendaResponses: [["status": 200, "body": page([])]])
-        openAgenda(app)
-        XCTAssertTrue(app.staticTexts["Nothing on your agenda"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Your RSVPs and waitlists, by date."].exists)
-        XCTAssertTrue(app.staticTexts["RSVP to a huddl in Discover and it will show up here."].exists)
-        XCTAssertFalse(app.buttons["Sign in"].exists)
-    }
-
-    func testFailedAgendaLoadOffersRetry() {
-        let app = launch(agendaResponses: [["status": 503, "body": "{}"],
-                                           ["status": 200, "body": page([coffee])]])
-        openAgenda(app)
-        XCTAssertTrue(app.staticTexts["Couldn’t load your agenda"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["agenda-coffee"].exists)
-        app.buttons["Try loading your agenda again"].tap()
-        XCTAssertTrue(app.buttons["agenda-coffee"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.staticTexts["Couldn’t load your agenda"].exists)
-    }
-
-    func testCancellingAnRSVPRemovesItFromTheAgenda() {
-        let app = launch(agendaResponses: [["status": 200, "body": page([coffee])],
-                                           ["status": 200, "body": page([])]])
-        openAgenda(app)
-        XCTAssertTrue(app.buttons["agenda-coffee"].waitForExistence(timeout: 5))
-        app.buttons["agenda-coffee"].tap()
-        XCTAssertTrue(app.buttons["Cancel RSVP"].waitForExistence(timeout: 5))
-        app.buttons["Cancel RSVP"].tap()
-        XCTAssertTrue(app.staticTexts["You haven’t RSVP’d"].waitForExistence(timeout: 5))
-        app.navigationBars.buttons.firstMatch.tap()
-        XCTAssertTrue(app.staticTexts["Nothing on your agenda"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["agenda-coffee"].exists)
-    }
-
     private func openAgenda(_ app: XCUIApplication) {
         XCTAssertTrue(app.tabBars.buttons["Agenda"].waitForExistence(timeout: 5))
         app.tabBars.buttons["Agenda"].tap()

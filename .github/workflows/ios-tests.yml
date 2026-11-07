@@ -69,11 +69,7 @@ jobs:
           retention-days: 7
 
   test:
-    name: Behavior tests (${{ matrix.suite }})
-    strategy:
-      fail-fast: false
-      matrix:
-        suite: [accounts, rsvp-and-discovery, location-and-joining, remaining]
+    name: Behavior tests
     runs-on: macos-26
     timeout-minutes: 30
     env:
@@ -83,14 +79,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Show toolchain
-        run: |
-          xcodebuild -version
-          xcrun simctl list devices available
-
       - name: Start Simulator
         timeout-minutes: 2
         run: |
+          xcodebuild -version
           simulator_id="$(xcrun simctl list devices available --json | jq -er '
             .devices["com.apple.CoreSimulator.SimRuntime.iOS-26-5"]
             | map(select(.name == "iPhone 17"))
@@ -115,22 +107,17 @@ jobs:
         timeout-minutes: 5
         run: xcrun simctl bootstatus "$HUDDLZ_SIMULATOR_ID" -b
 
+      # One booted Simulator, tests in sequence. Cloning Simulators for
+      # parallel workers took over 12 minutes on hosted runners before the
+      # first test ran, longer than the whole serial suite.
       - name: Run behavior tests
-        env:
-          TEST_GROUP: ${{ matrix.suite }}
         run: |
           set -o pipefail
-          selection="$(python3 scripts/ci-test-selection.py "$TEST_GROUP")"
-          test_selection=()
-          while IFS= read -r argument; do
-            test_selection+=("$argument")
-          done <<< "$selection"
           xcodebuild test-without-building \
             -project Huddlz/Huddlz.xcodeproj \
             -scheme Huddlz \
             -destination "platform=iOS Simulator,id=$HUDDLZ_SIMULATOR_ID" \
             -parallel-testing-enabled NO \
-            "${test_selection[@]}" \
             -derivedDataPath "$RUNNER_TEMP/HuddlzDerivedData" \
             -resultBundlePath "$RUNNER_TEMP/HuddlzTests.xcresult" \
             CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
@@ -147,14 +134,14 @@ jobs:
               result = json.load(result_file)
           print(f'{result["result"]}: {result["totalTestCount"]} tests, {result["failedTests"]} failed, {result["skippedTests"]} skipped')
           if result["result"] != "Passed" or result["totalTestCount"] == 0 or result["skippedTests"] != 0:
-              sys.exit("Every group must run its tests successfully without skips")
+              sys.exit("The suite must run its tests successfully without skips")
           PYRESULT
 
       - name: Save test results
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ios-test-results-${{ matrix.suite }}
+          name: ios-test-results
           path: |
             ${{ runner.temp }}/HuddlzTests.xcresult
             ${{ runner.temp }}/build.log
@@ -168,7 +155,7 @@ jobs:
     needs: [test, latest-toolchain]
     if: always()
     steps:
-      - name: Require every test group and compiler check to pass
+      - name: Require the behavior tests and compiler check to pass
         env:
           TEST_RESULT: ${{ needs.test.result }}
           COMPILER_RESULT: ${{ needs.latest-toolchain.result }}
