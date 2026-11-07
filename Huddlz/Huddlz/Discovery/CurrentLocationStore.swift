@@ -18,8 +18,8 @@ final class CurrentLocationStore: NSObject, CLLocationManagerDelegate {
         self.manager = manager ?? CLLocationManager()
         #endif
         super.init()
-        manager.delegate = self
-        manager.desiredAccuracy = kCLLocationAccuracyKilometer
+        self.manager.delegate = self
+        self.manager.desiredAccuracy = kCLLocationAccuracyKilometer
     }
 
     func request() {
