@@ -13,16 +13,14 @@ struct HostingGroup: Decodable, Identifiable {
 
 struct GroupDetailView: View {
     let id: String
-    @State private var group: HostingGroup?
-    @State private var huddlz: [Huddl] = []
-    @State private var hasLoadedHuddlz = false
-    @State private var huddlzError: String?
-    @State private var errorMessage: String?
+    @State private var store: GroupDetailStore
     @State private var reload = UUID()
-    @State private var nextPage: URL?
-    @State private var isLoadingMore = false
-    @State private var moreError = false
     @State private var moreRequest: UUID?
+
+    init(id: String) {
+        self.id = id
+        _store = State(initialValue: GroupDetailStore(id: id))
+    }
 
     var body: some View {
         ScrollView {
@@ -100,53 +98,15 @@ struct GroupDetailView: View {
         }
     }
 
-    private func load() async {
-        let client = DiscoveryClient()
-        if group == nil {
-            errorMessage = nil
-            do {
-                let result = try await client.group(id: id)
-                try Task.checkCancellation()
-                group = result
-            } catch {
-                guard !Task.isCancelled else { return }
-                if case DiscoveryError.notFound = error {
-                    errorMessage = "This group is no longer available."
-                } else {
-                    errorMessage = "The group couldn’t load right now. Please try again."
-                }
-                return
-            }
-        }
-        guard !hasLoadedHuddlz else { return }
-        huddlzError = nil
-        do {
-            let page = try await client.groupHuddlz(id: id)
-            try Task.checkCancellation()
-            huddlz = page.huddlz
-            nextPage = page.next
-            hasLoadedHuddlz = true
-        } catch {
-            guard !Task.isCancelled else { return }
-            huddlzError = "Please try again."
-        }
-    }
+    private var group: HostingGroup? { store.group }
+    private var huddlz: [Huddl] { store.huddlz }
+    private var hasLoadedHuddlz: Bool { store.hasLoadedHuddlz }
+    private var huddlzError: String? { store.huddlzError }
+    private var errorMessage: String? { store.errorMessage }
+    private var nextPage: URL? { store.nextPage }
+    private var isLoadingMore: Bool { store.isLoadingMore }
+    private var moreError: Bool { store.moreError }
 
-    private func loadMore() async {
-        guard !isLoadingMore, let url = nextPage else { return }
-        isLoadingMore = true
-        moreError = false
-        defer { isLoadingMore = false }
-        do {
-            let page = try await DiscoveryClient().groupPage(at: url, id: id)
-            try Task.checkCancellation()
-            var ids = Set(huddlz.map(\.id))
-            huddlz.append(contentsOf: page.huddlz.filter { ids.insert($0.id).inserted })
-            nextPage = page.next == url ? nil : page.next
-        } catch {
-            guard !Task.isCancelled else { return }
-            moreError = true
-        }
-    }
-
+    private func load() async { await store.load() }
+    private func loadMore() async { await store.loadMore() }
 }

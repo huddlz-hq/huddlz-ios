@@ -42,6 +42,46 @@ struct RegistrationBehaviorTests {
         #expect(account.message == nil)
     }
 
+    @Test("A rejected field explains what to correct, and the corrected details create the account")
+    func rejectedFieldCanBeCorrected() async throws {
+        let tokens = SessionTokenStore(service: "com.huddlz.tests.\(UUID())")
+        defer { Task { try? await tokens.clear() } }
+        var emails: [String] = []
+        let client = AccountClient { request in
+            let data = try #require(request.httpBody)
+            let body = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            emails.append(body["email"] as? String ?? "")
+            if emails.count == 1 {
+                return HTTPFixture.response(request, body: #"{"errors":[{"field":"email","message":"Enter a valid email address."}]}"#, status: 422)
+            }
+            return HTTPFixture.response(request, body: Self.session, status: 201)
+        }
+        let account = AccountStore(client: client, tokens: tokens)
+        await account.register(displayName: "Our Neighbor", email: "neighbor",
+                               password: "sample-password", confirmation: "sample-password", legalAcceptance: true)
+        #expect(account.message == "Enter a valid email address.")
+        #expect(account.user == nil)
+        await account.register(displayName: "Our Neighbor", email: "neighbor@example.com",
+                               password: "sample-password", confirmation: "sample-password", legalAcceptance: true)
+        #expect(account.user?.displayName == "Our Neighbor")
+        #expect(emails == ["neighbor", "neighbor@example.com"])
+    }
+
+    @Test("Registration doesn't start until the legal documents are accepted")
+    func registrationRequiresAcceptance() async {
+        let tokens = SessionTokenStore(service: "com.huddlz.tests.\(UUID())")
+        defer { Task { try? await tokens.clear() } }
+        var requests = 0
+        let account = AccountStore(client: AccountClient { request in
+            requests += 1
+            return HTTPFixture.response(request, body: Self.session, status: 201)
+        }, tokens: tokens)
+        await account.register(displayName: "Our Neighbor", email: "neighbor@example.com",
+                               password: "sample-password", confirmation: "sample-password", legalAcceptance: false)
+        #expect(requests == 0)
+        #expect(account.user == nil)
+    }
+
     @Test("Registration submits the entered fields and restores the account with only its saved token")
     func registrationSubmitsFieldsAndSavesSession() async throws {
         let tokens = SessionTokenStore(service: "com.huddlz.tests.\(UUID())")

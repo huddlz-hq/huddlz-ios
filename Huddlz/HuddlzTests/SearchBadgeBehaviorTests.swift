@@ -55,6 +55,35 @@ struct SearchBadgeBehaviorTests {
     }
 
 
+    @Test("Search cards mark going and waitlisted, leave others unmarked, and drop marks after signing out")
+    func badgesFollowTheSignedInPerson() async {
+        let tokens = SessionTokenStore(service: "com.huddlz.tests.\(UUID())")
+        defer { Task { try? await tokens.clear() } }
+        let account = AccountStore(client: AccountClient { request in
+            switch request.url?.path {
+            case "/api/json/huddlz":
+                return HTTPFixture.response(request, body: #"{"data":[{"id":"coffee","attributes":{"attendance_state":"confirmed"}},{"id":"walk","attributes":{"attendance_state":"waitlisted"}},{"id":"picnic","attributes":{"attendance_state":"none"}}]}"#)
+            case "/api/auth/sign_out":
+                return HTTPFixture.response(request, body: "", status: 204)
+            default:
+                return HTTPFixture.response(request, body: Self.session)
+            }
+        }, tokens: tokens)
+        let badges = SearchBadgeStore()
+        await badges.load(huddlIDs: ["coffee", "walk", "picnic"], account: account)
+        #expect(badges.attendance(for: "coffee", userID: account.user?.id) == nil)
+
+        await account.signIn(email: "neighbor@example.com", password: "sample-password")
+        await badges.load(huddlIDs: ["coffee", "walk", "picnic"], account: account)
+        #expect(badges.attendance(for: "coffee", userID: account.user?.id) == .confirmed)
+        #expect(badges.attendance(for: "walk", userID: account.user?.id) == .waitlisted)
+        #expect(badges.attendance(for: "picnic", userID: account.user?.id) != .confirmed)
+        #expect(badges.attendance(for: "picnic", userID: account.user?.id) != .waitlisted)
+
+        await account.signOut()
+        #expect(badges.attendance(for: "coffee", userID: account.user?.id) == nil)
+    }
+
     @Test("Card statuses load in bounded authenticated batches and ignore unrelated results")
     func cardStatusesUseBatches() async throws {
         let tokens = SessionTokenStore(service: "com.huddlz.tests.\(UUID())")
