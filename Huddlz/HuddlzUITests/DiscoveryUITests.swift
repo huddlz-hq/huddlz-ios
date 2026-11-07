@@ -28,7 +28,8 @@ final class DiscoveryUITests: DiscoveryUITestCase {
         XCTAssertFalse(app.searchFields.firstMatch.exists)
         XCTAssertTrue(app.staticTexts["Bring a mug and meet your neighbors."].exists)
         XCTAssertTrue(app.staticTexts["Juniper Café"].exists)
-        XCTAssertTrue(app.staticTexts["America/New_York"].exists)
+        // The zone is named in everyday words, and only when it differs from the phone's (see HuddlDetailBehaviorTests).
+        XCTAssertFalse(app.staticTexts["America/New_York"].exists)
         // The date card names the day, then the range in the event's zone; a later end day is spelled out.
         XCTAssertTrue(app.staticTexts["Thursday, September 10"].exists)
         let range = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "9:00")).firstMatch

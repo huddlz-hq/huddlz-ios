@@ -41,6 +41,39 @@ struct HuddlDetailBehaviorTests {
         #expect(huddl.relationships?.group?.data?.id == "neighbors")
     }
 
+    @Test("Opening a huddl asks for its group's slug and offers the huddl's web page")
+    func webPage() async throws {
+        let event = HTTPFixture.coffee.dropLast() + #", "relationships":{"group":{"data":{"type":"group","id":"neighbors"}}}}"#
+        let client = DiscoveryClient { request in
+            #expect(HTTPFixture.parameters(request)["fields[group]"] == "name,slug")
+            return HTTPFixture.response(request, body: """
+            {"data":\(event),"included":[{"type":"group","id":"neighbors","attributes":{"name":"Juniper Neighbors","slug":"juniper-neighbors"}}]}
+            """)
+        }
+        let huddl = try await client.detail(id: "coffee")
+        #expect(huddl.webURL?.absoluteString == "https://huddlz.com/groups/juniper-neighbors/huddlz/coffee")
+    }
+
+    @Test("Without its group's slug, a huddl offers no web page to share")
+    func noWebPageWithoutSlug() async throws {
+        let client = DiscoveryClient { request in
+            HTTPFixture.response(request, body: "{\"data\":\(HTTPFixture.coffee)}")
+        }
+        let huddl = try await client.detail(id: "coffee")
+        #expect(huddl.webURL == nil)
+    }
+
+    @Test("A huddl in another time zone names that zone in everyday words; one in your own zone leaves it unsaid")
+    func zoneName() async throws {
+        let client = DiscoveryClient { request in
+            HTTPFixture.response(request, body: "{\"data\":\(HTTPFixture.coffee)}")
+        }
+        let huddl = try await client.detail(id: "coffee")
+        let english = Locale(identifier: "en_US")
+        #expect(huddl.zoneName(comparedWith: TimeZone(identifier: "America/Los_Angeles")!, locale: english) == "Eastern Time")
+        #expect(huddl.zoneName(comparedWith: TimeZone(identifier: "America/New_York")!, locale: english) == nil)
+    }
+
     @Test("A withheld or missing host keeps the details without naming a host", arguments: [
         #", "relationships":{"group":{"data":null}}}"#,
         #", "relationships":{"group":{"data":{"type":"group","id":"neighbors"}}}}"#,

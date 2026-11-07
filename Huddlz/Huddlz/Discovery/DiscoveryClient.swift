@@ -63,12 +63,14 @@ struct DiscoveryClient {
         var components = URLComponents(url: baseURL.appending(path: "api/json/huddlz").appending(component: id), resolvingAgainstBaseURL: false)!
         components.queryItems = [
             URLQueryItem(name: "include", value: "group"),
-            URLQueryItem(name: "fields[group]", value: "name")
+            URLQueryItem(name: "fields[group]", value: "name,slug")
         ]
         let document: DetailDocument = try await get(components.url!)
         var huddl = document.data
         if let host = huddl.relationships?.group?.data, host.type == "group" {
-            huddl.hostName = document.included?.first { $0.type == host.type && $0.id == host.id }?.attributes?.name
+            let group = document.included?.first { $0.type == host.type && $0.id == host.id }?.attributes
+            huddl.hostName = group?.name
+            huddl.hostSlug = group?.slug
         }
         return huddl
     }
@@ -126,7 +128,7 @@ struct DiscoveryClient {
             let type: String
             let id: String
             let attributes: Attributes?
-            struct Attributes: Decodable { let name: String? }
+            struct Attributes: Decodable { let name: String?; let slug: String? }
         }
     }
 }
