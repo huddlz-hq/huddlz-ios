@@ -125,7 +125,7 @@ Search-badge tests cover going, waitlisted, and unmarked cards, foreground and p
 
 ## Continuous integration
 
-GitHub Actions runs the full native test suite for pull requests into main and pushes to main. One macOS job builds the tests, then runs every test with Xcode's parallel testing on three cloned Simulators (`TEST_WORKERS`). macOS runners are scarce, so a single job means each run waits for a runner once; most of the suite is Swift Testing and finishes in under a second. The suite must pass with no skips. The required “Native behavior tests” check passes only when that job and the Xcode 27.1 compiler check succeed. You can also start it from Actions → iOS tests → Run workflow.
+GitHub Actions runs the full native test suite for pull requests into main and pushes to main. One macOS job builds the tests, boots one Simulator while it builds, then runs every test on it in sequence. Cloning Simulators for parallel workers took longer on hosted runners than the whole serial run. macOS runners are scarce, so a single job means each run waits for a runner once; most of the suite is Swift Testing and finishes in under a second. The suite must pass with no skips. The required “Native behavior tests” check passes only when that job and the Xcode 27.1 compiler check succeed. You can also start it from Actions → iOS tests → Run workflow.
 
 Simulator builds use ad-hoc signing so tests can exercise the real Keychain. Disabling signing prevents Keychain access; no signing certificates or developer team are required for these simulator tests.
 
