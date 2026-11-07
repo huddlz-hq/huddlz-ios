@@ -66,9 +66,11 @@ struct Huddl: Identifiable, Decodable, Hashable, Sendable {
     }
 
     /// The zone's everyday name, such as "Central Time", only when it differs from the person's own.
-    var zoneName: String? {
-        let name = timeZone.localizedName(for: .generic, locale: .current)
-        return name == TimeZone.current.localizedName(for: .generic, locale: .current) ? nil : name
+    var zoneName: String? { zoneName(comparedWith: .current) }
+
+    func zoneName(comparedWith local: TimeZone, locale: Locale = .current) -> String? {
+        let name = timeZone.localizedName(for: .generic, locale: locale)
+        return name == local.localizedName(for: .generic, locale: locale) ? nil : name
     }
 
     var timeZoneLabel: String {

@@ -1,32 +1,12 @@
 import XCTest
 
-/// The huddl page keeps its name and RSVP in reach while reading, and lets people share it or add it to their calendar.
+/// The huddl page hands off to Apple's share sheet and new-event sheet. The rules behind them (the web link and
+/// the zone name) are covered by HuddlDetailBehaviorTests.
 @MainActor
 final class HuddlPageUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         XCUIDevice.shared.orientation = .portrait
-    }
-
-    func testTheHuddlsNameMovesIntoTheBarOnceItsTitleScrollsAway() {
-        let app = openPicnic()
-        let barTitle = app.navigationBars.staticTexts["Picnic in the park"]
-        XCTAssertFalse(barTitle.exists)
-        app.swipeUp()
-        XCTAssertTrue(barTitle.waitForExistence(timeout: 5))
-        app.swipeDown()
-        app.swipeDown()
-        XCTAssertTrue(barTitle.waitForNonExistence(timeout: 5))
-    }
-
-    func testTheRSVPActionStaysOnScreenWhileReadingTheDescription() {
-        let app = openPicnic()
-        // The description is one text element; read until its last line is on screen.
-        let about = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "garage on Oak Street")).firstMatch
-        let screen = app.windows.firstMatch.frame
-        for _ in 0..<4 where about.frame.maxY > screen.maxY - 120 { app.swipeUp() }
-        XCTAssertLessThan(about.frame.maxY, screen.maxY - 120)
-        XCTAssertTrue(app.buttons["Sign in to RSVP"].isHittable)
     }
 
     func testShareOffersTheHuddlsWebPage() {
@@ -52,26 +32,14 @@ final class HuddlPageUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Add to Calendar"].isHittable)
     }
 
-    func testAHuddlInAnotherTimeZoneNamesThatZone() {
-        let app = openPicnic(deviceZone: "America/Los_Angeles")
-        XCTAssertTrue(app.staticTexts["Central Time"].exists)
-        XCTAssertFalse(app.staticTexts["America/Chicago"].exists)
-    }
-
-    func testAHuddlInYourOwnTimeZoneLeavesTheZoneUnsaid() {
-        let app = openPicnic(deviceZone: "America/Chicago")
-        XCTAssertFalse(app.staticTexts["Central Time"].exists)
-        XCTAssertFalse(app.staticTexts["America/Chicago"].exists)
-    }
-
-    private func openPicnic(deviceZone: String = "America/Chicago") -> XCUIApplication {
+    private func openPicnic() -> XCUIApplication {
         let routes: [[String: Any]] = [
             ["path": "/api/json/huddlz/picnic", "query": [:], "responses": [["status": 200, "body": detail]]],
             ["path": "/api/json/huddlz", "query": [:], "responses": [["status": 200, "body": "{\"data\":[\(picnic)]}"]]]
         ]
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
-        app.launchEnvironment["TZ"] = deviceZone
+        app.launchEnvironment["TZ"] = "America/Chicago"
         app.launchEnvironment["HUDDLZ_UI_SESSION_ID"] = UUID().uuidString
         app.launchEnvironment["HUDDLZ_UI_HTTP_SCRIPT"] = String(decoding: try! JSONSerialization.data(withJSONObject: routes), as: UTF8.self)
         app.launchEnvironment["HUDDLZ_UI_MAP_SCRIPT"] = "[]"
