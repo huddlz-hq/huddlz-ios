@@ -48,6 +48,11 @@ struct Huddl: Identifiable, Decodable, Hashable, Sendable {
         return attributes.eventType == .virtual ? "Online" : "Location to be announced"
     }
 
+    /// The venue's name, the part of the address before its first comma, for rows too narrow for the whole address.
+    var venueName: String {
+        location.split(separator: ",").first.map { $0.trimmingCharacters(in: .whitespaces) } ?? location
+    }
+
     /// The address to show on a map; online huddlz and unannounced places have none.
     var mapAddress: String? {
         guard attributes.eventType != .virtual,
