@@ -10,8 +10,7 @@ final class AccountUITests: XCTestCase {
     func testRequestingPasswordResetShowsConfirmationAndKeepsEmailForSignIn() {
         let app = launch()
         app.buttons["Account"].tap()
-        app.textFields["Email"].tap()
-        app.textFields["Email"].typeText("neighbor@example.com")
+        app.textFields["Email"].typeAfterFocusing("neighbor@example.com")
         app.buttons["Forgot password?"].tap()
         XCTAssertTrue(app.staticTexts["Reset your password"].waitForExistence(timeout: 3))
         XCTAssertEqual(app.textFields["Email"].value as? String, "neighbor@example.com")
@@ -58,10 +57,8 @@ final class AccountUITests: XCTestCase {
 
     private func signIn(_ app: XCUIApplication) {
         app.buttons["Account"].tap()
-        app.textFields["Email"].tap()
-        app.textFields["Email"].typeText("neighbor@example.com")
-        app.secureTextFields["Password"].tap()
-        app.secureTextFields["Password"].typeText("sample-password\n")
+        app.textFields["Email"].typeAfterFocusing("neighbor@example.com")
+        app.secureTextFields["Password"].typeAfterFocusing("sample-password\n")
         let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["Close account"])
         XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: accountOperationTimeout), .completed)
     }

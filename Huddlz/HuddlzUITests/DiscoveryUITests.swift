@@ -17,8 +17,7 @@ final class DiscoveryUITests: DiscoveryUITestCase {
 
         XCTAssertTrue(app.buttons["huddl-hike"].exists)
         let search = app.searchFields.firstMatch
-        search.tap()
-        search.typeText("coffee\n")
+        search.typeAfterFocusing("coffee\n")
         let matchingCard = app.buttons.matching(NSPredicate(format: "identifier == %@ AND label CONTAINS %@",
                                                             "huddl-coffee", "Coffee search result")).firstMatch
         XCTAssertTrue(matchingCard.waitForExistence(timeout: 5))
@@ -148,8 +147,7 @@ final class DiscoveryLocationUITests: DiscoveryUITestCase {
         XCTAssertTrue(app.buttons["huddl-hike"].waitForExistence(timeout: 5))
         let system = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         XCTAssertFalse(system.alerts.firstMatch.exists)
-        app.searchFields.firstMatch.tap()
-        app.searchFields.firstMatch.typeText("coffee\n")
+        app.searchFields.firstMatch.typeAfterFocusing("coffee\n")
         app.buttons["When: All upcoming"].tap()
         app.buttons["This week"].tap()
         app.buttons["Event type: All types"].tap()

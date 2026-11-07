@@ -45,8 +45,7 @@ final class SignupCityUITests: RegistrationUITestCase {
         XCTAssertTrue(app.buttons["Choose a city"].waitForExistence(timeout: 5))
         capture(app, name: "Signup city choices")
         app.buttons["Choose a city"].tap()
-        app.textFields["City"].tap()
-        app.textFields["City"].typeText("St. Augustine\n")
+        app.textFields["City"].typeAfterFocusing("St. Augustine\n")
         let city = app.buttons["St. Augustine, FL, USA"]
         XCTAssertTrue(city.waitForExistence(timeout: 5))
         city.tap()
@@ -101,8 +100,7 @@ class RegistrationUITestCase: XCTestCase {
         app.buttons["Create account"].tap()
         XCTAssertTrue(app.buttons["Choose a city"].waitForExistence(timeout: 5))
         app.buttons["Choose a city"].tap()
-        app.textFields["City"].tap()
-        app.textFields["City"].typeText("St. Augustine\n")
+        app.textFields["City"].typeAfterFocusing("St. Augustine\n")
         XCTAssertTrue(app.buttons["St. Augustine, FL, USA"].waitForExistence(timeout: 5))
         app.buttons["St. Augustine, FL, USA"].tap()
         app.buttons["Save home city"].tap()
@@ -141,8 +139,7 @@ class RegistrationUITestCase: XCTestCase {
         }
         XCTAssertTrue(app.buttons["Not now"].isEnabled)
         app.buttons["Choose a city"].tap()
-        app.textFields["City"].tap()
-        app.textFields["City"].typeText("St. Augustine\n")
+        app.textFields["City"].typeAfterFocusing("St. Augustine\n")
         XCTAssertTrue(app.buttons["St. Augustine, FL, USA"].waitForExistence(timeout: 5))
         app.buttons["St. Augustine, FL, USA"].tap()
         XCTAssertTrue(app.buttons["Save home city"].waitForExistence(timeout: 5))
@@ -191,13 +188,9 @@ class RegistrationUITestCase: XCTestCase {
     }
 
     fileprivate func fillRegistration(_ app: XCUIApplication, email: String = "neighbor@example.com") {
-        app.textFields["Display name"].tap()
-        app.textFields["Display name"].typeText("Our Neighbor")
-        app.textFields["Email"].tap()
-        app.textFields["Email"].typeText(email)
-        app.secureTextFields["Password"].tap()
-        app.secureTextFields["Password"].typeText("sample-password")
-        app.secureTextFields["Confirm password"].tap()
-        app.secureTextFields["Confirm password"].typeText("sample-password\n")
+        app.textFields["Display name"].typeAfterFocusing("Our Neighbor")
+        app.textFields["Email"].typeAfterFocusing(email)
+        app.secureTextFields["Password"].typeAfterFocusing("sample-password")
+        app.secureTextFields["Confirm password"].typeAfterFocusing("sample-password\n")
     }
 }
