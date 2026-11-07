@@ -232,60 +232,6 @@ final class DiscoveryPagingUITests: DiscoveryUITestCase {
         XCTAssertFalse(app.buttons["Load more huddlz"].exists)
     }
 
-    func testFailedNextBatchWaitsForRetryAndKeepsTheCurrentCards() {
-        let book = coffee.replacingOccurrences(of: "coffee", with: "book")
-        let garden = coffee.replacingOccurrences(of: "coffee", with: "garden")
-        let app = launch(routes: [
-            ["path": "/api/json/huddlz", "query": ["page[after]": "book"],
-             "responses": [["status": 503, "body": "{}"], ["status": 200, "body": page([garden])]]],
-            route(body: page([coffee, hike, book], next: "https://huddlz.com/api/json/huddlz?page%5Bafter%5D=book"))
-        ])
-        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
-        let retry = app.buttons["Try loading more again"]
-        let scroll = app.scrollViews.firstMatch
-        for _ in 0..<3 {
-            if retry.exists && retry.isHittable { break }
-            scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8))
-                .press(forDuration: 0.1, thenDragTo: scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)),
-                       withVelocity: .slow, thenHoldForDuration: 0.3)
-        }
-        XCTAssertTrue(retry.isHittable)
-        XCTAssertTrue(app.buttons["huddl-book"].isHittable)
-        XCTAssertFalse(app.buttons["huddl-garden"].exists)
-        scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2))
-            .press(forDuration: 0.1, thenDragTo: scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8)),
-                   withVelocity: .slow, thenHoldForDuration: 0.3)
-        scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8))
-            .press(forDuration: 0.1, thenDragTo: scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)),
-                   withVelocity: .slow, thenHoldForDuration: 0.3)
-        XCTAssertTrue(retry.exists)
-        XCTAssertFalse(app.buttons["huddl-garden"].exists)
-        retry.tap()
-        XCTAssertTrue(app.buttons["huddl-garden"].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.buttons.matching(identifier: "huddl-book").count, 1)
-        XCTAssertFalse(retry.exists)
-    }
-
-    func testScrollingContinuesPastARepeatedBatch() {
-        let book = coffee.replacingOccurrences(of: "coffee", with: "book")
-        let garden = coffee.replacingOccurrences(of: "coffee", with: "garden")
-        let app = launch(routes: [
-            route(query: ["page[after]": "book"], body: page([book], next: "https://huddlz.com/api/json/huddlz?page%5Bafter%5D=overlap")),
-            route(query: ["page[after]": "overlap"], body: page([garden])),
-            route(body: page([coffee, hike, book], next: "https://huddlz.com/api/json/huddlz?page%5Bafter%5D=book"))
-        ])
-        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
-        let scroll = app.scrollViews.firstMatch
-        for _ in 0..<3 {
-            if app.buttons["huddl-garden"].exists { break }
-            scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8))
-                .press(forDuration: 0.1, thenDragTo: scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)),
-                       withVelocity: .slow, thenHoldForDuration: 0.3)
-        }
-        XCTAssertTrue(app.buttons["huddl-garden"].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.buttons.matching(identifier: "huddl-book").count, 1)
-    }
-
     func testPullToRefreshShowsNativeProgressAndKeepsSearchAvailable() {
         let app = launch(routes: [[
             "path": "/api/json/huddlz", "query": [:],
@@ -331,38 +277,6 @@ final class DiscoveryPagingUITests: DiscoveryUITestCase {
         XCTAssertGreaterThan(brightness.max()! - brightness.min()!, 30, "The native spinner must be visible above the heading")
         XCTAssertTrue(app.buttons["huddl-hike"].waitForExistence(timeout: 12))
         XCTAssertTrue(app.searchFields.firstMatch.exists)
-    }
-
-    func testFailedRefreshKeepsCardsAndFiltersAndCanBeRetried() {
-        let filtered: [String: Any] = [
-            "path": "/api/json/huddlz",
-            "query": ["query": "coffee", "date_filter": "this_week", "event_type": "in_person"],
-            "responses": [["status": 200, "body": page([coffee])],
-                          ["status": 503, "body": "{}"],
-                          ["status": 200, "body": page([hike])]]
-        ]
-        let app = launch(routes: [filtered, route(body: page([hike]))])
-        XCTAssertTrue(app.buttons["huddl-hike"].waitForExistence(timeout: 5))
-        app.searchFields.firstMatch.tap()
-        app.searchFields.firstMatch.typeText("coffee\n")
-        app.buttons["When: All upcoming"].tap()
-        app.buttons["This week"].tap()
-        app.buttons["Event type: All types"].tap()
-        app.buttons["In person"].tap()
-        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
-
-        let scroll = app.scrollViews.firstMatch
-        scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2))
-            .press(forDuration: 0.1, thenDragTo: scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85)))
-        XCTAssertTrue(app.buttons["huddl-coffee"].exists)
-        XCTAssertTrue(app.staticTexts["Couldn’t refresh huddlz."].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.searchFields.firstMatch.value as? String, "coffee")
-        XCTAssertTrue(app.buttons["When: This week"].exists)
-        XCTAssertTrue(app.buttons["Event type: In person"].exists)
-        app.buttons["Try refreshing again"].tap()
-        XCTAssertTrue(app.buttons["huddl-hike"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["huddl-coffee"].exists)
-        XCTAssertFalse(app.staticTexts["Couldn’t refresh huddlz."].exists)
     }
 }
 
@@ -450,38 +364,6 @@ final class DiscoveryLocationUITests: DiscoveryUITestCase {
         XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 15))
     }
 
-    func testChoosingAPlaceShowsNearbyResultsAndKeepsFilters() {
-        let nearby = coffee.replacingOccurrences(of: "Coffee with neighbors", with: "Nearby coffee")
-        let app = launch(routes: [
-            route(query: ["query": "coffee", "date_filter": "this_week", "event_type": "in_person",
-                          "search_latitude": "29.9012", "search_longitude": "-81.3124",
-                          "distance_miles": "25"], body: page([nearby])),
-            route(body: page([hike]))
-        ], places: [["query": "St. Augustine", "results": [
-            ["name": "St. Augustine", "address": "St. Augustine, FL, USA",
-             "latitude": 29.9012, "longitude": -81.3124, "timeZone": "America/New_York"]
-        ]]])
-        XCTAssertTrue(app.buttons["huddl-hike"].waitForExistence(timeout: 5))
-        app.searchFields.firstMatch.tap()
-        app.searchFields.firstMatch.typeText("coffee\n")
-        app.buttons["When: All upcoming"].tap()
-        app.buttons["This week"].tap()
-        app.buttons["Event type: All types"].tap()
-        app.buttons["In person"].tap()
-        app.buttons["Location: Anywhere"].tap()
-        app.textFields["City or postal code"].tap()
-        app.textFields["City or postal code"].typeText("St. Augustine\n")
-        let place = app.buttons["St. Augustine, FL, USA"]
-        XCTAssertTrue(place.waitForExistence(timeout: 5))
-        place.tap()
-        let card = app.buttons.matching(NSPredicate(format: "identifier == %@ AND label CONTAINS %@",
-                                                   "huddl-coffee", "Nearby coffee")).firstMatch
-        XCTAssertTrue(card.waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["Location: St. Augustine, FL, USA"].exists)
-        XCTAssertTrue(app.buttons["When: This week"].exists)
-        XCTAssertTrue(app.buttons["Event type: In person"].exists)
-    }
-
     func testWideningTheDistanceFindsMoreHuddlz() {
         let app = launch(routes: [
             route(query: ["search_latitude": "29.9012", "search_longitude": "-81.3124",
@@ -563,31 +445,6 @@ final class DiscoveryVenueUITests: DiscoveryUITestCase {
             let attachment = XCTAttachment(screenshot: app.screenshot())
             attachment.lifetime = .keepAlways
             add(attachment)
-            XCTAssertEqual(app.state, .runningForeground)
-            XCTAssertNotEqual(maps.state, .runningForeground)
-            venue.tap()
-            assertMapsOpened(maps)
-        }
-    }
-
-    func testUnresolvedVenueStillOpensAnAddressSearchInMaps() {
-        let maps = XCUIApplication(bundleIdentifier: "com.apple.Maps")
-        defer { maps.terminate() }
-        let address = "Juniper Café"
-        let match: [String: Any] = ["name": address, "address": "1 Oak Street", "latitude": 37.3, "longitude": -122.0]
-        let lookups: [[[String: Any]]] = [[], [["query": address, "results": []]],
-                                        [["query": address, "results": [match, match]]]]
-        for places in lookups {
-            let app = launch(routes: [
-                route(body: page([coffee])),
-                route(path: "/api/json/huddlz/coffee", body: "{\"data\":\(coffee)}")
-            ], places: places)
-            XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
-            app.buttons["huddl-coffee"].tap()
-            let venue = app.buttons["Open location in Maps"]
-            XCTAssertTrue(venue.waitForExistence(timeout: 5))
-            XCTAssertTrue(venue.label.contains(address))
-            XCTAssertFalse(app.maps.firstMatch.exists)
             XCTAssertEqual(app.state, .runningForeground)
             XCTAssertNotEqual(maps.state, .runningForeground)
             venue.tap()

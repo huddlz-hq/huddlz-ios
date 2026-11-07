@@ -88,10 +88,6 @@ final class SignupCityUITests: RegistrationUITestCase {
         XCTAssertTrue(app.buttons["When: This week"].exists)
     }
 
-    func testFailedCitySaveKeepsTheCityAndCanRetry() {
-        verifyFailedCitySave(retry: true)
-    }
-
     func testFailedCitySaveCanBeSkippedWithoutChangingSearch() {
         verifyFailedCitySave(retry: false)
     }

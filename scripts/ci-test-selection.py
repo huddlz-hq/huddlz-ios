@@ -12,7 +12,7 @@ GROUPS = {
     ],
     "location-and-joining": [  # 404 seconds
         "DiscoveryLocationUITests", "JoiningUITests", "SignupCityUITests",
-        "SearchBadgeUITests", "HuddlzUITestsLaunchTests",
+        "SearchBadgeUITests",
     ],
     # Includes the Swift integration target and future test classes automatically.
     "remaining": None,  # 401 seconds of UI tests
