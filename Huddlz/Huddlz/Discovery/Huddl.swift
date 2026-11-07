@@ -48,6 +48,14 @@ struct Huddl: Identifiable, Decodable, Hashable, Sendable {
         return attributes.eventType == .virtual ? "Online" : "Location to be announced"
     }
 
+    /// The address to show on a map; online huddlz and unannounced places have none.
+    var mapAddress: String? {
+        guard attributes.eventType != .virtual,
+              let address = attributes.physicalLocation?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !address.isEmpty else { return nil }
+        return address
+    }
+
     var timeZone: TimeZone { TimeZone(identifier: attributes.timeZone) ?? .gmt }
 
     var timeZoneLabel: String {

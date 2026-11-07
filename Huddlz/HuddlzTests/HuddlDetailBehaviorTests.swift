@@ -77,3 +77,60 @@ struct HuddlDetailBehaviorTests {
         #expect(retried?.title == "Coffee with neighbors")
     }
 }
+
+@MainActor
+struct DiscoveryPlaceBehaviorTests {
+    private static let staugustine = DiscoveryPlace(name: "St. Augustine, FL, USA", latitude: 29.9012,
+                                                    longitude: -81.3124, timeZone: "America/New_York")
+
+    @Test("Widening the distance searches farther from the same place")
+    func wideningTheDistance() async {
+        let discovery = DiscoveryStore(client: DiscoveryClient { request in
+            let parameters = HTTPFixture.parameters(request)
+            #expect(parameters["search_latitude"] == "29.9012")
+            let events = parameters["distance_miles"] == "50" ? [HTTPFixture.coffee, HTTPFixture.hike] : [HTTPFixture.coffee]
+            return HTTPFixture.response(request, body: HTTPFixture.page(events))
+        })
+        var query = DiscoveryQuery()
+        query.place = Self.staugustine
+        await discovery.search(query)
+        #expect(discovery.huddlz.map(\.id) == ["coffee"])
+        query.distanceMiles = 50
+        await discovery.search(query)
+        #expect(discovery.huddlz.map(\.id) == ["coffee", "hike"])
+    }
+
+    @Test("Clearing the place recovers from no nearby huddlz and keeps the search text")
+    func clearingThePlace() async {
+        let discovery = DiscoveryStore(client: DiscoveryClient { request in
+            let parameters = HTTPFixture.parameters(request)
+            #expect(parameters["query"] == "coffee")
+            let nearby = parameters["search_latitude"] != nil
+            #expect(nearby || parameters["distance_miles"] == nil)
+            return HTTPFixture.response(request, body: HTTPFixture.page(nearby ? [] : [HTTPFixture.coffee]))
+        })
+        var query = DiscoveryQuery(text: "coffee")
+        query.place = Self.staugustine
+        await discovery.search(query)
+        #expect(discovery.huddlz.isEmpty)
+        #expect(discovery.errorMessage == nil)
+        query.place = nil
+        await discovery.search(query)
+        #expect(discovery.huddlz.map(\.id) == ["coffee"])
+    }
+
+    @Test("Only in-person and hybrid huddlz with an announced address get a map", arguments: [
+        ("in_person", "\"Juniper Café\"", "Juniper Café"),
+        ("hybrid", "\"  Juniper Café \"", "Juniper Café"),
+        ("virtual", "\"Juniper Café\"", nil),
+        ("in_person", "null", nil),
+        ("in_person", "\"   \"", nil)
+    ] as [(String, String, String?)])
+    func mapAddress(eventType: String, physicalLocation: String, expected: String?) async throws {
+        let event = HTTPFixture.coffee.replacingOccurrences(of: "in_person", with: eventType)
+            .replacingOccurrences(of: "\"Juniper Café\"", with: physicalLocation)
+        let client = DiscoveryClient { request in HTTPFixture.response(request, body: "{\"data\":\(event)}") }
+        let huddl = try await client.detail(id: "coffee")
+        #expect(huddl.mapAddress == expected)
+    }
+}
