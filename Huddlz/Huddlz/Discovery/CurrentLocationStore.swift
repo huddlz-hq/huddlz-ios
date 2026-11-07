@@ -10,11 +10,12 @@ final class CurrentLocationStore: NSObject, CLLocationManagerDelegate {
     private let manager: CLLocationManager
     private var timeout: Task<Void, Never>?
 
-    override init() {
+    /// Pass a manager only to replace the device's location service in tests.
+    init(manager: CLLocationManager? = nil) {
         #if DEBUG
-        manager = UITestLocationManager.makeIfRequested() ?? CLLocationManager()
+        self.manager = manager ?? UITestLocationManager.makeIfRequested() ?? CLLocationManager()
         #else
-        manager = CLLocationManager()
+        self.manager = manager ?? CLLocationManager()
         #endif
         super.init()
         manager.delegate = self
