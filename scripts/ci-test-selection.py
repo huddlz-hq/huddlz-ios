@@ -2,20 +2,16 @@
 """Select disjoint CI groups; unassigned tests always run in remaining."""
 import sys
 
-# Balanced using main's CI run 34439192628. Durations are test time, before setup.
+# Balanced using main's CI run 34439192628, when each group ran serially.
+# Durations are serial test time, before setup. Each group now runs its
+# classes in parallel on cloned Simulators.
 GROUPS = {
-    "accounts": [  # 404 seconds
+    "accounts-and-discovery": [  # about 800 seconds serially
         "AccountUITests", "GroupUITests", "ProfileDefaultsUITests",
-    ],
-    "rsvp-and-discovery": [  # 392 seconds
         "RSVPUITests", "DiscoveryPagingUITests", "DiscoveryVenueUITests", "DiscoveryArtworkUITests",
     ],
-    "location-and-joining": [  # 404 seconds
-        "DiscoveryLocationUITests", "JoiningUITests", "SignupCityUITests",
-        "SearchBadgeUITests", "HuddlzUITestsLaunchTests",
-    ],
-    # Includes the Swift integration target and future test classes automatically.
-    "remaining": None,  # 401 seconds of UI tests
+    # Includes the Swift Testing target and future test classes automatically.
+    "remaining": None,  # about 800 seconds of UI tests serially
 }
 
 

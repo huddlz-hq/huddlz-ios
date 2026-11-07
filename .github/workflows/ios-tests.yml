@@ -68,14 +68,10 @@ jobs:
             ${{ runner.temp }}/latest-release-build.log
           retention-days: 7
 
-  test:
-    name: Behavior tests (${{ matrix.suite }})
-    strategy:
-      fail-fast: false
-      matrix:
-        suite: [accounts, rsvp-and-discovery, location-and-joining, remaining]
+  build:
+    name: Build behavior tests
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 20
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     steps:
@@ -84,22 +80,9 @@ jobs:
           persist-credentials: false
 
       - name: Show toolchain
-        run: |
-          xcodebuild -version
-          xcrun simctl list devices available
+        run: xcodebuild -version
 
-      - name: Start Simulator
-        timeout-minutes: 2
-        run: |
-          simulator_id="$(xcrun simctl list devices available --json | jq -er '
-            .devices["com.apple.CoreSimulator.SimRuntime.iOS-26-5"]
-            | map(select(.name == "iPhone 17"))
-            | if length == 1 then .[0].udid else error("Expected one iPhone 17 simulator") end
-          ')"
-          xcrun simctl boot "$simulator_id"
-          echo "HUDDLZ_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
-
-      - name: Build tests while Simulator starts
+      - name: Build tests once for every test group
         run: |
           set -o pipefail
           xcodebuild build-for-testing \
@@ -111,11 +94,70 @@ jobs:
             CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
             2>&1 | tee "$RUNNER_TEMP/build.log"
 
-      - name: Wait for Simulator readiness
-        timeout-minutes: 5
-        run: xcrun simctl bootstatus "$HUDDLZ_SIMULATOR_ID" -b
+      # A tarball keeps the ad-hoc signatures, symlinks, and permissions that
+      # a zipped artifact would lose.
+      - name: Package build products
+        run: tar -cf "$RUNNER_TEMP/HuddlzTestProducts.tar" -C "$RUNNER_TEMP/HuddlzDerivedData/Build" Products
 
-      - name: Run behavior tests
+      - name: Share build products
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-test-products
+          path: ${{ runner.temp }}/HuddlzTestProducts.tar
+          compression-level: 1
+          retention-days: 1
+
+      - name: Save build log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-build-log
+          path: ${{ runner.temp }}/build.log
+          retention-days: 7
+
+  test:
+    name: Behavior tests (${{ matrix.suite }})
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [accounts-and-discovery, remaining]
+    runs-on: macos-26
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      # Each worker is a cloned Simulator. Standard macOS runners have three
+      # CPU cores, so three workers keeps every core busy without thrashing.
+      TEST_WORKERS: 3
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Find Simulator
+        run: |
+          simulator_id="$(xcrun simctl list devices available --json | jq -er '
+            .devices["com.apple.CoreSimulator.SimRuntime.iOS-26-5"]
+            | map(select(.name == "iPhone 17"))
+            | if length == 1 then .[0].udid else error("Expected one iPhone 17 simulator") end
+          ')"
+          echo "HUDDLZ_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
+
+      - name: Download build products
+        uses: actions/download-artifact@v7
+        with:
+          name: ios-test-products
+          path: ${{ runner.temp }}
+
+      - name: Unpack build products
+        run: |
+          mkdir -p "$RUNNER_TEMP/HuddlzBuild"
+          tar -xf "$RUNNER_TEMP/HuddlzTestProducts.tar" -C "$RUNNER_TEMP/HuddlzBuild"
+          xctestrun="$(find "$RUNNER_TEMP/HuddlzBuild/Products" -maxdepth 1 -name '*.xctestrun' -print -quit)"
+          test -n "$xctestrun"
+          echo "HUDDLZ_XCTESTRUN=$xctestrun" >> "$GITHUB_ENV"
+
+      - name: Run behavior tests on cloned Simulators
         env:
           TEST_GROUP: ${{ matrix.suite }}
         run: |
@@ -126,14 +168,12 @@ jobs:
             test_selection+=("$argument")
           done <<< "$selection"
           xcodebuild test-without-building \
-            -project Huddlz/Huddlz.xcodeproj \
-            -scheme Huddlz \
+            -xctestrun "$HUDDLZ_XCTESTRUN" \
             -destination "platform=iOS Simulator,id=$HUDDLZ_SIMULATOR_ID" \
-            -parallel-testing-enabled NO \
+            -parallel-testing-enabled YES \
+            -parallel-testing-worker-count "$TEST_WORKERS" \
             "${test_selection[@]}" \
-            -derivedDataPath "$RUNNER_TEMP/HuddlzDerivedData" \
             -resultBundlePath "$RUNNER_TEMP/HuddlzTests.xcresult" \
-            CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
             2>&1 | tee "$RUNNER_TEMP/xcodebuild.log"
 
       - name: Verify test results
@@ -157,7 +197,6 @@ jobs:
           name: ios-test-results-${{ matrix.suite }}
           path: |
             ${{ runner.temp }}/HuddlzTests.xcresult
-            ${{ runner.temp }}/build.log
             ${{ runner.temp }}/xcodebuild.log
             ${{ runner.temp }}/test-summary.json
           retention-days: 7
@@ -165,13 +204,15 @@ jobs:
   required-tests:
     name: Native behavior tests
     runs-on: ubuntu-latest
-    needs: [test, latest-toolchain]
+    needs: [build, test, latest-toolchain]
     if: always()
     steps:
       - name: Require every test group and compiler check to pass
         env:
+          BUILD_RESULT: ${{ needs.build.result }}
           TEST_RESULT: ${{ needs.test.result }}
           COMPILER_RESULT: ${{ needs.latest-toolchain.result }}
         run: |
+          test "$BUILD_RESULT" = success
           test "$TEST_RESULT" = success
           test "$COMPILER_RESULT" = success
