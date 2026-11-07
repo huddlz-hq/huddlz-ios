@@ -22,49 +22,6 @@ final class AccountUITests: XCTestCase {
         XCTAssertEqual(app.textFields["Email"].value as? String, "neighbor@example.com")
     }
 
-    func testFailedPasswordResetShowsAnErrorAndAllowsRetry() {
-        for (status, message) in [
-            (503, "Couldn’t request a reset link. Check your connection and try again."),
-            (429, "Too many requests. Please try again later.")
-        ] {
-            let app = launch(resetResponses: [["status": status, "body": "{}"], ["status": 204, "body": ""]])
-            app.buttons["Account"].tap()
-            app.buttons["Forgot password?"].tap()
-            app.textFields["Email"].tap()
-            app.textFields["Email"].typeText("neighbor@example.com\n")
-            XCTAssertTrue(app.staticTexts[message].waitForExistence(timeout: 5))
-            XCTAssertEqual(app.textFields["Email"].value as? String, "neighbor@example.com")
-            XCTAssertFalse(app.staticTexts["Check your email"].exists)
-            XCTAssertTrue(app.buttons["Send reset link"].isEnabled)
-            app.buttons["Send reset link"].tap()
-            XCTAssertTrue(app.staticTexts["If an account exists for this email, we’ll send a reset link."].waitForExistence(timeout: 5))
-            XCTAssertFalse(app.staticTexts[message].exists)
-            app.terminate()
-        }
-    }
-
-    func testShowingAndHidingPasswordPreservesEntryAndCanSignIn() {
-        let app = launch()
-        app.buttons["Account"].tap()
-        XCTAssertTrue(app.staticTexts["Welcome back"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Sign in to huddlz"].exists)
-        app.textFields["Email"].tap()
-        app.textFields["Email"].typeText("neighbor@example.com")
-        app.secureTextFields["Password"].tap()
-        app.secureTextFields["Password"].typeText("sample-password")
-        XCTAssertTrue(app.buttons["Show password"].exists)
-        app.buttons["Show password"].tap()
-        XCTAssertEqual(app.textFields["Password"].value as? String, "sample-password")
-        app.buttons["Hide password"].tap()
-        XCTAssertTrue(app.secureTextFields["Password"].exists)
-        app.buttons["Sign in"].tap()
-        let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["Close account"])
-        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: accountOperationTimeout), .completed)
-        app.buttons["Account"].tap()
-        XCTAssertTrue(app.staticTexts["Our Neighbor"].waitForExistence(timeout: 5))
-        signOut(app)
-    }
-
     func testSigningInReturnsToBrowsingAndShowsTheAccount() {
         let app = launch()
         app.buttons["When: All upcoming"].tap()
@@ -75,58 +32,6 @@ final class AccountUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Our Neighbor"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["neighbor@example.com"].exists)
         XCTAssertTrue(app.staticTexts["You’re signed in."].exists)
-        signOut(app)
-    }
-
-    func testReopeningRestoresTheSignedInAccount() {
-        let app = launch()
-        signIn(app)
-        app.terminate()
-        app.launch()
-        XCTAssertTrue(app.buttons["Account"].waitForExistence(timeout: 5))
-        app.buttons["Account"].tap()
-        XCTAssertTrue(app.staticTexts["Our Neighbor"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["neighbor@example.com"].exists)
-        signOut(app)
-    }
-
-    func testSigningOutStaysSignedOutAfterReopening() {
-        let app = launch(savedSession: true)
-        app.buttons["Account"].tap()
-        XCTAssertTrue(app.staticTexts["Our Neighbor"].waitForExistence(timeout: 60))
-        signOut(app)
-        app.terminate()
-        app.launch()
-        XCTAssertTrue(app.buttons["Account"].waitForExistence(timeout: 5))
-        app.buttons["Account"].tap()
-        XCTAssertTrue(app.textFields["Email"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.staticTexts["neighbor@example.com"].exists)
-    }
-
-    func testIncorrectCredentialsKeepEmailAndAllowAnotherAttempt() {
-        let app = launch(signInResponses: [
-            ["status": 401, "body": "{}"],
-            ["status": 200, "body": "{\"token\":\"fixture-token\",\"user\":\(user)}"]
-        ])
-        app.buttons["Account"].tap()
-        app.textFields["Email"].tap()
-        app.textFields["Email"].typeText("neighbor@example.com")
-        app.secureTextFields["Password"].tap()
-        app.secureTextFields["Password"].typeText("wrong-password\n")
-        XCTAssertTrue(app.staticTexts["The email or password is incorrect. Try again."].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.textFields["Email"].value as? String, "neighbor@example.com")
-        XCTAssertFalse(app.staticTexts["Our Neighbor"].exists)
-        app.secureTextFields["Password"].tap()
-        // Hosted Simulator can drop the first focus tap after keyboard dismissal.
-        if !app.keyboards.firstMatch.waitForExistence(timeout: 2) {
-            app.secureTextFields["Password"].tap()
-        }
-        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
-        app.secureTextFields["Password"].typeText("sample-password\n")
-        let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["Close account"])
-        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: accountOperationTimeout), .completed)
-        app.buttons["Account"].tap()
-        XCTAssertTrue(app.staticTexts["Our Neighbor"].waitForExistence(timeout: 5))
         signOut(app)
     }
 

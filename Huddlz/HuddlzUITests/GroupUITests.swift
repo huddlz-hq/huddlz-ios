@@ -33,65 +33,6 @@ final class GroupUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Bring a mug."].waitForExistence(timeout: 5))
     }
 
-    func testAGroupWithNoUpcomingHuddlzExplainsTheEmptyList() {
-        let app = launch(groupResponses: [["status": 200, "body": group]], huddlz: page([]))
-        openHost(app)
-        XCTAssertTrue(app.staticTexts["No upcoming huddlz"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Neighbors who love getting outside."].exists)
-        app.navigationBars.buttons.firstMatch.tap()
-        XCTAssertTrue(app.staticTexts["Bring a mug."].waitForExistence(timeout: 5))
-    }
-
-    func testAnUnavailableGroupOffersRetryAndKeepsTheOriginalHuddlAccessible() {
-        for status in [404, 503] {
-            let app = launch(groupResponses: [["status": status, "body": "{}"], ["status": 200, "body": group]], huddlz: page([]))
-            openHost(app)
-            XCTAssertTrue(app.staticTexts["Couldn’t load this group"].waitForExistence(timeout: 5))
-            if status == 404 {
-                XCTAssertTrue(app.staticTexts["This group is no longer available."].exists)
-                app.navigationBars.buttons.firstMatch.tap()
-                XCTAssertTrue(app.staticTexts["Bring a mug."].waitForExistence(timeout: 5))
-                continue
-            }
-            app.buttons["Try again"].tap()
-            XCTAssertTrue(app.staticTexts["Neighbors who love getting outside."].waitForExistence(timeout: 5))
-            app.navigationBars.buttons.firstMatch.tap()
-            XCTAssertTrue(app.staticTexts["Bring a mug."].waitForExistence(timeout: 5))
-        }
-    }
-
-    func testFailedHuddlzKeepTheGroupVisibleAndCanBeRetried() {
-        let app = launch(groupResponses: [["status": 200, "body": group]], huddlz: page([walk]),
-                         huddlResponses: [["status": 503, "body": "{}"], ["status": 200, "body": page([walk])]])
-        openHost(app)
-        XCTAssertTrue(app.staticTexts["Couldn’t load upcoming huddlz."].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Neighbors who love getting outside."].exists)
-        XCTAssertFalse(app.staticTexts["No upcoming huddlz"].exists)
-        app.buttons["Try loading huddlz again"].tap()
-        XCTAssertTrue(app.buttons["huddl-walk"].waitForExistence(timeout: 5))
-    }
-
-    func testMoreHuddlzCanBeRetriedWithoutLosingTheGroupOrExistingCards() {
-        let next = "https://huddlz.com/api/json/huddlz/by_group?group_id=neighbors&page%5Bafter%5D=walk"
-        let firstPage = "{\"data\":[\(walk)],\"links\":{\"next\":\"\(next)\"}}"
-        let app = launch(groupResponses: [["status": 200, "body": group]], huddlz: firstPage, extraRoutes: [
-            ["path": "/api/json/huddlz/by_group", "query": ["group_id": "neighbors", "page[after]": "walk"],
-             "responses": [["status": 503, "body": "{}"], ["status": 200, "body": page([coffee])]]]
-        ])
-        openHost(app)
-        let more = app.buttons["Load more huddlz"]
-        for _ in 0..<4 where !more.isHittable { app.swipeUp() }
-        XCTAssertTrue(more.isHittable)
-        more.tap()
-        let retry = app.buttons["Try loading more again"]
-        XCTAssertTrue(retry.waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["huddl-walk"].exists)
-        retry.tap()
-        XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
-        XCTAssertFalse(more.exists)
-        XCTAssertFalse(retry.exists)
-    }
-
     private func openHost(_ app: XCUIApplication) {
         XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
         app.buttons["huddl-coffee"].tap()

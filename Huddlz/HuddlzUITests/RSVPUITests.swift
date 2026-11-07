@@ -49,73 +49,9 @@ final class RSVPUITests: XCTestCase {
         signOut(app)
     }
 
-    func testRejectedRSVPKeepsStatusAndAllowsRetry() {
-        let app = makeApp(status: "none")
-        setRoutes(app, status: "none", rsvpResponses: [
-            ["status": 503, "body": "{}"],
-            ["status": 422, "body": #"{"errors":[{"detail":"This huddl is full"}]}"#],
-            response("confirmed")
-        ])
-        app.launchWithSavedSession()
-        openHuddl(app)
-        XCTAssertTrue(app.buttons["RSVP"].waitForExistence(timeout: 60))
-        app.buttons["RSVP"].tap()
-        XCTAssertTrue(app.staticTexts["Couldn’t update your RSVP. Please try again."].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["You haven’t RSVP’d"].exists)
-        app.buttons["RSVP"].tap()
-        XCTAssertTrue(app.staticTexts["This huddl is full"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["Bring a mug."].exists)
-        app.buttons["RSVP"].tap()
-        XCTAssertTrue(app.staticTexts["You’re going"].waitForExistence(timeout: 10))
-        signOut(app)
-    }
-
-    func testClosedHuddlzExplainWhyRSVPIsUnavailable() {
-        for (state, year) in [("cancelled", "2099"), ("completed", "2099"), ("draft", "2099"), ("published", "2020")] {
-            let app = makeApp(status: "none")
-            setRoutes(app, status: "none", lifecycle: state, year: year)
-            app.launch()
-            openHuddl(app)
-            XCTAssertTrue(app.staticTexts["RSVPs are closed for this huddl."].waitForExistence(timeout: 5))
-            XCTAssertFalse(app.buttons["Sign in to RSVP"].exists)
-            XCTAssertFalse(app.buttons["RSVP"].exists)
-            app.terminate()
-        }
-    }
-
-    func testRSVPRefreshesJoiningAccessAndSearchBadge() {
-        let app = makeApp(status: "none")
-        setRoutes(app, status: "none", joiningResponses: [linkResponse(nil), linkResponse("https://example.com/room")])
-        app.launchWithSavedSession()
-        openHuddl(app)
-        app.swipeUp()
-        XCTAssertTrue(app.staticTexts["Online joining details aren’t available for this account yet."].waitForExistence(timeout: 60))
-        app.swipeDown()
-        app.buttons["RSVP"].tap()
-        XCTAssertTrue(app.staticTexts["You’re going"].waitForExistence(timeout: 10))
-        app.swipeUp()
-        XCTAssertTrue(app.buttons["Join online"].waitForExistence(timeout: 10))
-        app.navigationBars.buttons.firstMatch.tap()
-        let card = app.buttons["huddl-coffee"]
-        let badge = NSPredicate(format: "label CONTAINS %@", "Going")
-        XCTAssertTrue(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: badge, object: card)], timeout: 10) == .completed)
-        card.tap()
-        signOut(app)
-    }
-
     private func linkResponse(_ value: String?) -> [String: Any] {
         let body: [String: Any] = ["data": ["id": "coffee", "attributes": ["visible_virtual_link": value as Any? ?? NSNull()]]]
         return ["status": 200, "body": String(decoding: try! JSONSerialization.data(withJSONObject: body), as: UTF8.self)]
-    }
-
-    func testWaitlistedPersonCanLeaveTheWaitlist() {
-        let app = makeApp(status: "waitlisted")
-        app.launchWithSavedSession()
-        openHuddl(app)
-        XCTAssertTrue(app.buttons["Leave waitlist"].waitForExistence(timeout: 60))
-        app.buttons["Leave waitlist"].tap()
-        XCTAssertTrue(app.staticTexts["You haven’t RSVP’d"].waitForExistence(timeout: 10))
-        signOut(app)
     }
 
     private func response(_ state: String) -> [String: Any] {

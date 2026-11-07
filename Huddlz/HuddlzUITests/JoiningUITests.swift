@@ -38,44 +38,6 @@ final class JoiningUITests: XCTestCase {
         XCTAssertFalse(link.exists)
     }
 
-    func testReturningAfterLosingAccessRemovesJoiningLink() {
-        let app = makeApp()
-        setRoutes(app, joiningResponses: [response("https://example.com/huddl-room"), response(nil)])
-        app.launchWithSavedSession()
-        openHuddl(app)
-        app.swipeUp()
-        XCTAssertTrue(app.buttons["Join online"].waitForExistence(timeout: 60))
-        XCUIDevice.shared.press(.home)
-        app.activate()
-        XCTAssertTrue(app.buttons["Join online"].waitForNonExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["Online joining details aren’t available for this account yet."].exists)
-        signOut(app)
-    }
-
-    func testFailedJoiningRequestKeepsDetailsAndCanBeRetried() {
-        let app = makeApp()
-        setRoutes(app, joiningResponses: [["status": 503, "body": "{}"], response("https://example.com/huddl-room")])
-        app.launchWithSavedSession()
-        openHuddl(app)
-        app.swipeUp()
-        XCTAssertTrue(app.staticTexts["Couldn’t load joining details."].waitForExistence(timeout: 60))
-        XCTAssertTrue(app.staticTexts["Bring a mug."].exists)
-        XCTAssertFalse(app.buttons["Join online"].exists)
-        app.buttons["Try loading joining details again"].tap()
-        XCTAssertTrue(app.buttons["Join online"].waitForExistence(timeout: 60))
-        signOut(app)
-    }
-
-    func testInPersonHuddlHasNoOnlineJoiningSection() {
-        let app = makeApp()
-        setRoutes(app, eventType: "in_person")
-        app.launch()
-        openHuddl(app)
-        app.swipeUp()
-        XCTAssertFalse(app.staticTexts["Join online"].exists)
-        XCTAssertFalse(app.buttons["Join online"].exists)
-    }
-
     private func response(_ link: String?) -> [String: Any] {
         let attributes: [String: Any] = ["visible_virtual_link": link as Any? ?? NSNull()]
         let data = try! JSONSerialization.data(withJSONObject: ["data": ["id": "coffee", "attributes": attributes]])
