@@ -108,25 +108,52 @@ jobs:
             CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
             2>&1 | tee "$RUNNER_TEMP/build.log"
 
-      # A first boot migrates the Simulator's data. It usually takes about a
-      # minute, but took eight on a slow runner.
-      - name: Start Simulator
-        timeout-minutes: 15
+      # A hosted runner's Simulator has never booted. Its first boot builds
+      # 1.3 GB of device data and took 1 to 8 minutes of the runner's three
+      # cores, and the first tests then ran beside the leftover work. So one
+      # run boots the Simulator, shuts it down, and caches its data; later
+      # runs on the same runner image restore it and boot in seconds.
+      - name: Find Simulator
+        id: simulator
         run: |
+          sudo mdutil -a -i off > /dev/null 2>&1 || true
           simulator_id="$(xcrun simctl list devices available --json | jq -er '
             .devices["com.apple.CoreSimulator.SimRuntime.iOS-26-5"]
             | map(select(.name == "iPhone 17"))
             | if length == 1 then .[0].udid else error("Expected one iPhone 17 simulator") end
           ')"
-          # TEMPORARY diagnostics: what does a first boot spend its time on?
-          du -sh ~/Library/Developer/CoreSimulator/Caches/* ~/Library/Developer/CoreSimulator/Caches/dyld/* 2>/dev/null || true
-          du -sh ~/Library/Developer/CoreSimulator/Devices/"$simulator_id" 2>/dev/null || true
-          sysctl -n hw.ncpu hw.memsize
-          nohup bash -c 'while true; do date -u +%T; ps -Ao %cpu,rss,comm -r | head -7; sleep 15; done' > "$RUNNER_TEMP/cpu-samples.log" 2>&1 &
-          xcrun simctl bootstatus "$simulator_id" -b
-          du -sh ~/Library/Developer/CoreSimulator/Caches/* ~/Library/Developer/CoreSimulator/Caches/dyld/* 2>/dev/null || true
-          du -sh ~/Library/Developer/CoreSimulator/Devices/"$simulator_id" 2>/dev/null || true
           echo "HUDDLZ_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
+          echo "data=$HOME/Library/Developer/CoreSimulator/Devices/$simulator_id" >> "$GITHUB_OUTPUT"
+          echo "key=booted-simulator-v1-$ImageOS-$ImageVersion-$simulator_id" >> "$GITHUB_OUTPUT"
+
+      - name: Restore booted Simulator data
+        id: booted
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ steps.simulator.outputs.data }}
+          key: ${{ steps.simulator.outputs.key }}
+
+      - name: Boot Simulator for the first time
+        if: steps.booted.outputs.cache-hit != 'true'
+        timeout-minutes: 15
+        run: |
+          xcrun simctl bootstatus "$HUDDLZ_SIMULATOR_ID" -b
+          xcrun simctl shutdown "$HUDDLZ_SIMULATOR_ID"
+
+      - name: Save booted Simulator data
+        if: steps.booted.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ steps.simulator.outputs.data }}
+          key: ${{ steps.simulator.outputs.key }}
+
+      - name: Start Simulator
+        timeout-minutes: 15
+        run: |
+          # CoreSimulator read the device before its data was restored.
+          killall -9 com.apple.CoreSimulator.CoreSimulatorService 2> /dev/null || true
+          du -sh "$HOME/Library/Developer/CoreSimulator/Devices/$HUDDLZ_SIMULATOR_ID"
+          xcrun simctl bootstatus "$HUDDLZ_SIMULATOR_ID" -b | tail -3
 
       # One booted Simulator per job, tests in sequence. Cloning Simulators for
       # parallel workers took over 12 minutes on hosted runners before the
@@ -154,10 +181,6 @@ jobs:
             -resultBundlePath "$RUNNER_TEMP/HuddlzTests.xcresult" \
             CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
             2>&1 | tee "$RUNNER_TEMP/xcodebuild.log"
-
-      - name: TEMPORARY show CPU samples
-        if: always()
-        run: sed -E 's#/.*/##' "$RUNNER_TEMP/cpu-samples.log" | head -900
 
       - name: Verify test results
         run: |
