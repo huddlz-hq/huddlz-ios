@@ -11,6 +11,7 @@ struct AccountView: View {
     @State private var isResettingPassword = false
     @State private var isRegistering = false
     @State private var isChoosingHome = false
+    @State private var isDeletingAccount = false
     @FocusState private var focusedField: Field?
 
     private enum Field: Hashable { case email, password, visiblePassword }
@@ -49,6 +50,10 @@ struct AccountView: View {
                     }
                     .buttonStyle(.glass)
                     .disabled(account.isBusy)
+                    Button(role: .destructive) { isDeletingAccount = true } label: {
+                        Text("Delete account").sheetLink()
+                    }
+                    .disabled(account.isBusy)
                 } else if isRegistering {
                     RegistrationForm(email: $email, onSuccess: { isChoosingHome = true }, onSignIn: {
                         account.clearMessage()
@@ -72,14 +77,15 @@ struct AccountView: View {
             .frame(maxWidth: 560)
             .frame(maxWidth: .infinity)
             // The reset sheet stacks on this one; its fields must not be read (or tapped) through it.
-            .accessibilityHidden(isResettingPassword)
+            .accessibilityHidden(isResettingPassword || isDeletingAccount)
         }
         .scrollBounceBehavior(.basedOnSize)
         .presentationBackground(.regularMaterial)
-        .presentationDetents(dynamicTypeSize.isAccessibilitySize || isRegistering ? [.large] : [.height(account.user == nil ? 640 : 360), .large])
+        .presentationDetents(dynamicTypeSize.isAccessibilitySize || isRegistering ? [.large] : [.height(account.user == nil ? 640 : 420), .large])
         .presentationDragIndicator(.visible)
         .interactiveDismissDisabled(account.isBusy)
         .sheet(isPresented: $isResettingPassword) { PasswordResetView(email: $email) }
+        .sheet(isPresented: $isDeletingAccount) { DeleteAccountView() }
     }
 
     private var title: String {

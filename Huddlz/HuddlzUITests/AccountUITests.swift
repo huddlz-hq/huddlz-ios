@@ -34,9 +34,34 @@ final class AccountUITests: XCTestCase {
         signOut(app)
     }
 
+    func testDeletingTheAccountAfterConfirmingReturnsToSignIn() {
+        let app = launch(savedSession: true, deleteResponses: [
+            ["status": 422, "body": #"{"errors":[{"field":"password","message":"That password isn’t right."}]}"#],
+            ["status": 204, "body": ""]
+        ])
+        app.buttons["Account"].tap()
+        XCTAssertTrue(app.staticTexts["Our Neighbor"].waitForExistence(timeout: 60))
+        app.buttons["Delete account"].tap()
+        XCTAssertTrue(app.staticTexts["Delete your account?"].waitForExistence(timeout: 5))
+        app.secureTextFields["Password"].typeAfterFocusing("wrong-password\n")
+        XCTAssertTrue(app.staticTexts["That password isn’t right."].waitForExistence(timeout: accountOperationTimeout))
+        app.buttons["Keep my account"].tap()
+        XCTAssertTrue(app.staticTexts["Our Neighbor"].waitForExistence(timeout: 5))
+        app.buttons["Delete account"].tap()
+        app.secureTextFields["Password"].typeAfterFocusing("sample-password")
+        app.buttons["Delete account"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Your account was deleted."].waitForExistence(timeout: accountOperationTimeout))
+        XCTAssertTrue(app.textFields["Email"].exists)
+        XCTAssertFalse(app.staticTexts["neighbor@example.com"].exists)
+        app.terminate()
+        app.launch()
+        app.buttons["Account"].tap()
+        XCTAssertTrue(app.textFields["Email"].waitForExistence(timeout: 5))
+    }
+
     private let user = #"{"id":"neighbor","email":"neighbor@example.com","display_name":"Our Neighbor"}"#
 
-    private func launch(savedSession: Bool = false, signInResponses: [[String: Any]]? = nil, resetResponses: [[String: Any]]? = nil) -> XCUIApplication {
+    private func launch(savedSession: Bool = false, signInResponses: [[String: Any]]? = nil, resetResponses: [[String: Any]]? = nil, deleteResponses: [[String: Any]]? = nil) -> XCUIApplication {
         XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
@@ -46,6 +71,7 @@ final class AccountUITests: XCTestCase {
             ["path": "/api/json/huddlz", "query": [:], "responses": [["status": 200, "body": "{\"data\":[]}"]]],
             ["path": "/api/auth/me", "query": [:], "responses": [["status": 200, "body": "{\"user\":\(user)}"]]],
             ["path": "/api/auth/sign_out", "query": [:], "responses": [["status": 204, "body": ""]]],
+            ["path": "/api/auth/account", "query": [:], "responses": deleteResponses ?? [["status": 204, "body": ""]]],
             ["path": "/api/auth/sign_in", "query": [:], "responses": signInResponses ?? [
                 ["status": 200, "body": "{\"token\":\"fixture-token\",\"user\":\(user)}"]]]
         ]
