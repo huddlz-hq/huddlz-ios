@@ -118,7 +118,14 @@ jobs:
             | map(select(.name == "iPhone 17"))
             | if length == 1 then .[0].udid else error("Expected one iPhone 17 simulator") end
           ')"
+          # TEMPORARY diagnostics: what does a first boot spend its time on?
+          du -sh ~/Library/Developer/CoreSimulator/Caches/* ~/Library/Developer/CoreSimulator/Caches/dyld/* 2>/dev/null || true
+          du -sh ~/Library/Developer/CoreSimulator/Devices/"$simulator_id" 2>/dev/null || true
+          sysctl -n hw.ncpu hw.memsize
+          nohup bash -c 'while true; do date -u +%T; ps -Ao %cpu,rss,comm -r | head -7; sleep 15; done' > "$RUNNER_TEMP/cpu-samples.log" 2>&1 &
           xcrun simctl bootstatus "$simulator_id" -b
+          du -sh ~/Library/Developer/CoreSimulator/Caches/* ~/Library/Developer/CoreSimulator/Caches/dyld/* 2>/dev/null || true
+          du -sh ~/Library/Developer/CoreSimulator/Devices/"$simulator_id" 2>/dev/null || true
           echo "HUDDLZ_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
 
       # One booted Simulator per job, tests in sequence. Cloning Simulators for
@@ -147,6 +154,10 @@ jobs:
             -resultBundlePath "$RUNNER_TEMP/HuddlzTests.xcresult" \
             CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
             2>&1 | tee "$RUNNER_TEMP/xcodebuild.log"
+
+      - name: TEMPORARY show CPU samples
+        if: always()
+        run: sed -E 's#/.*/##' "$RUNNER_TEMP/cpu-samples.log" | head -900
 
       - name: Verify test results
         run: |
