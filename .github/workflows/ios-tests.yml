@@ -68,6 +68,33 @@ jobs:
             ${{ runner.temp }}/latest-release-build.log
           retention-days: 7
 
+  # Temporary: measure the Swift Testing rules as a Mac app, with no Simulator.
+  mac-rules:
+    name: Store rules on the Mac (measuring)
+    runs-on: macos-26
+    timeout-minutes: 15
+    continue-on-error: true
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Run store rules as a Mac Catalyst app
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project Huddlz/Huddlz.xcodeproj \
+            -scheme Huddlz \
+            -destination 'platform=macOS,variant=Mac Catalyst' \
+            -only-testing:HuddlzTests \
+            -derivedDataPath "$RUNNER_TEMP/HuddlzMacDerivedData" \
+            -resultBundlePath "$RUNNER_TEMP/HuddlzMacTests.xcresult" \
+            SUPPORTS_MACCATALYST=YES \
+            CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
+            2>&1 | tee "$RUNNER_TEMP/mac-xcodebuild.log" | grep -v '^    \|^$' | tail -400
+
   test:
     name: Behavior tests (${{ matrix.half }})
     strategy:
