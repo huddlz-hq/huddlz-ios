@@ -75,7 +75,7 @@ jobs:
       matrix:
         half: [signup-and-rsvp, everything-else]
     runs-on: macos-26
-    timeout-minutes: 25
+    timeout-minutes: 30
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
       # The slowest UI journeys, about half of the suite's time. The first job
@@ -108,8 +108,10 @@ jobs:
             CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
             2>&1 | tee "$RUNNER_TEMP/build.log"
 
+      # A first boot migrates the Simulator's data. It usually takes about a
+      # minute, but took eight on a slow runner.
       - name: Start Simulator
-        timeout-minutes: 8
+        timeout-minutes: 15
         run: |
           simulator_id="$(xcrun simctl list devices available --json | jq -er '
             .devices["com.apple.CoreSimulator.SimRuntime.iOS-26-5"]
