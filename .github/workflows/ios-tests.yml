@@ -73,7 +73,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        half: [signup-and-rsvp, everything-else]
+        half: [quick, signup-and-rsvp, everything-else]
     runs-on: macos-26
     timeout-minutes: 30
     env:
@@ -88,6 +88,15 @@ jobs:
         HuddlzUITests/RSVPUITests
         HuddlzUITests/JoiningUITests
         HuddlzUITests/DiscoveryVenueUITests
+      # The quick job: every Swift Testing rule plus one UI journey each for
+      # launching, signing in, finding a huddl, RSVPing, and creating an account.
+      QUICK: >-
+        HuddlzTests
+        HuddlzUITests/TabsUITests/testLaunchingShowsDiscoverWithItsSearchFieldAndACollapsedTabPill
+        HuddlzUITests/AccountUITests/testSigningInReturnsToBrowsingAndShowsTheAccount
+        HuddlzUITests/DiscoveryUITests/testSearchingAndOpeningACardShowsCurrentDetailsWithoutSignIn
+        HuddlzUITests/RSVPUITests/testRSVPAndCancellationUpdateYourAttendance
+        HuddlzUITests/RegistrationUITests/testCreatingAnAccountRequiresAcceptanceAndReturnsToBrowsingWithASavedSession
     steps:
       - uses: actions/checkout@v7
         with:
@@ -164,13 +173,17 @@ jobs:
         run: |
           set -o pipefail
           selection=()
-          for journey in $SLOW_JOURNEYS; do
-            if [ "$HALF" = signup-and-rsvp ]; then
-              selection+=("-only-testing:$journey")
-            else
-              selection+=("-skip-testing:$journey")
-            fi
-          done
+          if [ "$HALF" = quick ]; then
+            for test in $QUICK; do selection+=("-only-testing:$test"); done
+          else
+            for journey in $SLOW_JOURNEYS; do
+              if [ "$HALF" = signup-and-rsvp ]; then
+                selection+=("-only-testing:$journey")
+              else
+                selection+=("-skip-testing:$journey")
+              fi
+            done
+          fi
           xcodebuild test-without-building \
             -project Huddlz/Huddlz.xcodeproj \
             -scheme Huddlz \
