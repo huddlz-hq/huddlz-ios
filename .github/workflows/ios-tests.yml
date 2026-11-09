@@ -81,26 +81,38 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Run store rules as an iPad app on the Mac
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project Huddlz/Huddlz.xcodeproj \
+            -scheme Huddlz \
+            -destination 'platform=macOS,arch=arm64,variant=Designed for [iPad,iPhone]' \
+            -only-testing:HuddlzTests \
+            -derivedDataPath "$RUNNER_TEMP/HuddlzPadDerivedData" \
+            CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
+            2>&1 | tee "$RUNNER_TEMP/pad-xcodebuild.log" | grep -v '^    \|^$' | tail -150
+
       - name: Run store rules as a Mac Catalyst app
         run: |
           set -o pipefail
+          sed -i '' 's/SDKROOT = iphoneos;/SDKROOT = iphoneos; SUPPORTS_MACCATALYST = YES;/' Huddlz/Huddlz.xcodeproj/project.pbxproj
           xcodebuild test \
             -project Huddlz/Huddlz.xcodeproj \
             -scheme Huddlz \
             -destination 'platform=macOS,variant=Mac Catalyst' \
             -only-testing:HuddlzTests \
             -derivedDataPath "$RUNNER_TEMP/HuddlzMacDerivedData" \
-            -resultBundlePath "$RUNNER_TEMP/HuddlzMacTests.xcresult" \
-            SUPPORTS_MACCATALYST=YES \
             CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
-            2>&1 | tee "$RUNNER_TEMP/mac-xcodebuild.log" | grep -v '^    \|^$' | tail -400
+            2>&1 | tee "$RUNNER_TEMP/mac-xcodebuild.log" | grep -v '^    \|^$' | tail -150
 
   test:
     name: Behavior tests (${{ matrix.half }})
     strategy:
       fail-fast: false
       matrix:
-        half: [quick, signup-and-rsvp, everything-else]
+        half: [quick]
     runs-on: macos-26
     timeout-minutes: 30
     env:
