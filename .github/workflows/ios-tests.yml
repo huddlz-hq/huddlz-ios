@@ -68,12 +68,12 @@ jobs:
             ${{ runner.temp }}/latest-release-build.log
           retention-days: 7
 
-  # Temporary: measure the Swift Testing rules as a Mac app, with no Simulator.
-  mac-rules:
-    name: Store rules on the Mac (measuring)
+  # The store rules compile and run on the Mac itself, so they need no
+  # Simulator and finish before the UI jobs have booted one.
+  store-rules:
+    name: Store rules
     runs-on: macos-26
-    timeout-minutes: 15
-    continue-on-error: true
+    timeout-minutes: 10
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     steps:
@@ -81,31 +81,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Run store rules as an iPad app on the Mac
-        continue-on-error: true
+      - name: Run store rules
         run: |
           set -o pipefail
-          xcodebuild test \
-            -project Huddlz/Huddlz.xcodeproj \
-            -scheme Huddlz \
-            -destination 'platform=macOS,arch=arm64,variant=Designed for [iPad,iPhone]' \
-            -only-testing:HuddlzTests \
-            -derivedDataPath "$RUNNER_TEMP/HuddlzPadDerivedData" \
-            CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
-            2>&1 | tee "$RUNNER_TEMP/pad-xcodebuild.log" | grep -v '^    \|^$' | tail -150
-
-      - name: Run store rules as a Mac Catalyst app
-        run: |
-          set -o pipefail
-          sed -i '' 's/SDKROOT = iphoneos;/SDKROOT = iphoneos; SUPPORTS_MACCATALYST = YES;/' Huddlz/Huddlz.xcodeproj/project.pbxproj
-          xcodebuild test \
-            -project Huddlz/Huddlz.xcodeproj \
-            -scheme Huddlz \
-            -destination 'platform=macOS,variant=Mac Catalyst' \
-            -only-testing:HuddlzTests \
-            -derivedDataPath "$RUNNER_TEMP/HuddlzMacDerivedData" \
-            CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
-            2>&1 | tee "$RUNNER_TEMP/mac-xcodebuild.log" | grep -v '^    \|^$' | tail -150
+          swift --version
+          swift test 2>&1 | tee "$RUNNER_TEMP/store-rules.log" | tail -300
 
   test:
     name: Behavior tests (${{ matrix.half }})
