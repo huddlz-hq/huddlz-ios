@@ -69,31 +69,36 @@ jobs:
           retention-days: 7
 
   test:
-    name: Behavior tests
+    name: Behavior tests (${{ matrix.half }})
+    strategy:
+      fail-fast: false
+      matrix:
+        half: [signup-and-rsvp, everything-else]
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 25
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      # The slowest UI journeys, about half of the suite's time. The first job
+      # runs only these classes and the second skips them, so a new test class
+      # or Swift Testing suite always runs in the second job without an edit here.
+      SLOW_JOURNEYS: >-
+        HuddlzUITests/RegistrationUITests
+        HuddlzUITests/SignupCityUITests
+        HuddlzUITests/SignupLocationUITests
+        HuddlzUITests/RSVPUITests
+        HuddlzUITests/JoiningUITests
+        HuddlzUITests/DiscoveryVenueUITests
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - name: Start Simulator
-        timeout-minutes: 2
-        run: |
-          xcodebuild -version
-          simulator_id="$(xcrun simctl list devices available --json | jq -er '
-            .devices["com.apple.CoreSimulator.SimRuntime.iOS-26-5"]
-            | map(select(.name == "iPhone 17"))
-            | if length == 1 then .[0].udid else error("Expected one iPhone 17 simulator") end
-          ')"
-          xcrun simctl boot "$simulator_id"
-          echo "HUDDLZ_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
-
-      - name: Build tests while Simulator starts
+      # Build before booting. A booting Simulator takes the runner's three
+      # cores, and building beside it took six minutes instead of one.
+      - name: Build tests
         run: |
           set -o pipefail
+          xcodebuild -version
           xcodebuild build-for-testing \
             -project Huddlz/Huddlz.xcodeproj \
             -scheme Huddlz \
@@ -103,21 +108,39 @@ jobs:
             CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
             2>&1 | tee "$RUNNER_TEMP/build.log"
 
-      - name: Wait for Simulator readiness
-        timeout-minutes: 5
-        run: xcrun simctl bootstatus "$HUDDLZ_SIMULATOR_ID" -b
+      - name: Start Simulator
+        timeout-minutes: 8
+        run: |
+          simulator_id="$(xcrun simctl list devices available --json | jq -er '
+            .devices["com.apple.CoreSimulator.SimRuntime.iOS-26-5"]
+            | map(select(.name == "iPhone 17"))
+            | if length == 1 then .[0].udid else error("Expected one iPhone 17 simulator") end
+          ')"
+          xcrun simctl bootstatus "$simulator_id" -b
+          echo "HUDDLZ_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
 
-      # One booted Simulator, tests in sequence. Cloning Simulators for
+      # One booted Simulator per job, tests in sequence. Cloning Simulators for
       # parallel workers took over 12 minutes on hosted runners before the
-      # first test ran, longer than the whole serial suite.
+      # first test ran, so the suite is split across two jobs instead.
       - name: Run behavior tests
+        env:
+          HALF: ${{ matrix.half }}
         run: |
           set -o pipefail
+          selection=()
+          for journey in $SLOW_JOURNEYS; do
+            if [ "$HALF" = signup-and-rsvp ]; then
+              selection+=("-only-testing:$journey")
+            else
+              selection+=("-skip-testing:$journey")
+            fi
+          done
           xcodebuild test-without-building \
             -project Huddlz/Huddlz.xcodeproj \
             -scheme Huddlz \
             -destination "platform=iOS Simulator,id=$HUDDLZ_SIMULATOR_ID" \
             -parallel-testing-enabled NO \
+            "${selection[@]}" \
             -derivedDataPath "$RUNNER_TEMP/HuddlzDerivedData" \
             -resultBundlePath "$RUNNER_TEMP/HuddlzTests.xcresult" \
             CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
@@ -141,7 +164,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ios-test-results
+          name: ios-test-results-${{ matrix.half }}
           path: |
             ${{ runner.temp }}/HuddlzTests.xcresult
             ${{ runner.temp }}/build.log
