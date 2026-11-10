@@ -191,7 +191,7 @@ jobs:
         run: |
           busy() { ps -Ao %cpu,comm -r | grep CoreSimulator | head -12 | sed -E 's#^ *([0-9.]+) .*/#\1 #' || true; }
           echo "Busiest Simulator processes before:"; busy
-          noisy='news|health|amsengagement|shortcut|people|calendar|weather|stocks|tips|fitness|chronod|widget|siri|assistant|parsec|spotlight|searchd|suggest|photoanalysis|mediaanalysis|appstore|itunes|icloud|cloudd|passd|homed|findmy|remindd|podcast|music|books|gamed'
+          noisy='news|health|fitcore|fitness|amsengagement|shortcut|people|chronod|widget|weather|stocks|tips|calendar'
           domain="user/501"
           xcrun simctl spawn "$HUDDLZ_SIMULATOR_ID" launchctl print "$domain" 2> /dev/null |
             grep -Eo 'com\.apple\.[A-Za-z0-9._-]+' | sort -u | grep -Ei "$noisy" > "$RUNNER_TEMP/noisy-services" || true
