@@ -329,6 +329,37 @@ struct AccountClient {
         _ = try await send(request)
     }
 
+    /// Deletes the signed-in account after the server checks the password.
+    func deleteAccount(token: String, password: String) async throws {
+        struct Confirmation: Encodable { let password: String }
+        var request = URLRequest(url: URL(string: "https://huddlz.com/api/auth/account")!)
+        request.httpMethod = "DELETE"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.httpBody = try JSONEncoder().encode(Confirmation(password: password))
+        let (data, response) = try await fetch(request)
+        try Task.checkCancellation()
+        guard let response = response as? HTTPURLResponse else { throw AccountError.unavailable }
+        switch response.statusCode {
+        case 200..<300: return
+        case 401: throw AccountError.unauthorized
+        case 422:
+            struct Errors: Decodable {
+                struct Detail: Decodable { let message: String }
+                let errors: [Detail]
+            }
+            let message = (try? JSONDecoder().decode(Errors.self, from: data))?.errors.first?.message
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let readable = message.flatMap {
+                !$0.isEmpty && $0.count <= 240 && $0.rangeOfCharacter(from: .controlCharacters) == nil ? $0 : nil
+            }
+            throw AccountDeletionError(message: readable ?? "Couldn’t delete your account. Check your password and try again.")
+        case 429: throw AccountError.rateLimited
+        default: throw AccountError.unavailable
+        }
+    }
+
     private func send(_ request: URLRequest) async throws -> Data {
         let (data, response) = try await fetch(request)
         try Task.checkCancellation()
@@ -379,6 +410,11 @@ private final class AccountRedirectPolicy: NSObject, URLSessionTaskDelegate, @un
 enum RSVPAction: String {
     case reserve = "rsvp"
     case cancel = "cancel_rsvp"
+}
+
+struct AccountDeletionError: LocalizedError {
+    let message: String
+    var errorDescription: String? { message }
 }
 
 struct RSVPError: LocalizedError {

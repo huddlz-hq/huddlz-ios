@@ -183,6 +183,35 @@ final class AccountStore {
         }
     }
 
+    /// Deletes the account on the server, then forgets it on this device.
+    /// Returns a message to show beside the password when the server refuses.
+    func deleteAccount(password: String) async -> String? {
+        guard !isBusy, user != nil else { return nil }
+        isBusy = true
+        message = nil
+        defer { isBusy = false }
+        do {
+            guard let token = try await tokens.load() else { throw AccountError.unauthorized }
+            try await client.deleteAccount(token: token, password: password)
+        } catch let error as AccountDeletionError {
+            return error.message
+        } catch AccountError.unauthorized {
+            user = nil
+            try? await tokens.clear()
+            message = "Your session has expired. Sign in again to delete your account."
+            return nil
+        } catch AccountError.rateLimited {
+            return "Too many attempts. Please try again later."
+        } catch {
+            return "Couldn’t delete your account. Check your connection and try again."
+        }
+        user = nil
+        canRetrySession = false
+        try? await tokens.clear()
+        message = "Your account was deleted."
+        return nil
+    }
+
     func clearMessage() {
         guard !isBusy else { return }
         message = nil
