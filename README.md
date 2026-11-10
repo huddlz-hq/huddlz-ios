@@ -125,12 +125,19 @@ Search-badge tests cover going, waitlisted, and unmarked cards, foreground and p
 
 ## Continuous integration
 
-GitHub Actions runs every test for pull requests into main and pushes to main, split so that nothing waits on a long job:
+GitHub Actions runs these jobs:
 
 - **Store rules** (1m20s on November 9, 2026) runs `swift test` on the Mac with no Simulator: the 90 Swift Testing rules.
-- **Behavior tests** runs every UI journey across four Simulator jobs side by side, each with about three minutes of tests. The first three jobs run the classes listed for them in the workflow; the last, `everything-else`, skips those classes, so a new test class runs there without an edit. It also runs the store rules again inside the Simulator.
+- **Behavior tests** runs every UI journey across four Simulator jobs side by side. The first three jobs run the classes listed for them in the workflow; the last, `everything-else`, skips those classes, so a new test class runs there without an edit. It also runs the store rules again inside the Simulator. The four jobs took 9 to 12 minutes on free hosted runners, about seven of them before a job's first test starts.
 
-Each Simulator job builds before it boots, because a booting Simulator slows the build sixfold. A hosted runner's Simulator has never booted, and its first boot took 1 to 8 minutes, so one run caches the booted Simulator's data and later runs on the same runner image restore it. Cloning Simulators for parallel workers took longer on hosted runners than the whole serial run. Each job must pass with no skips. The required “Native behavior tests” check passes only when the store rules, all four Simulator jobs, and the Xcode 27.1 compiler check succeed. You can also start it from Actions → iOS tests → Run workflow.
+When those jobs run depends on whether main has a [merge queue](https://docs.github.com/en/repositories/configuring-branches-and-rules-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue), which the **Choose Simulator jobs** job checks on every run:
+
+- With a merge queue, a pull request runs the store rules and the compiler check only, and hears back in about two minutes. Choosing "Merge when ready" puts it in the queue, which runs every UI journey on the exact commit that would land. A failure there keeps the change off main. A push to main then runs five core journeys on one Simulator (`CORE_JOURNEYS` in the workflow), which also keeps the Simulator cache on main for the queue to restore.
+- Without a merge queue, every pull request and every push to main runs every UI journey.
+
+The queue is the gate for every contributor. To see a UI journey fail sooner, run `./scripts/test-behaviors.sh` on a Mac before you queue.
+
+Each Simulator job builds before it boots, because a booting Simulator slows the build sixfold. A hosted runner's Simulator has never booted, and its first boot took 1 to 8 minutes, so one run caches the booted Simulator's data and later runs on the same runner image restore it. Cloning Simulators for parallel workers took longer on hosted runners than the whole serial run. Each job must pass with no skips. The required “Native behavior tests” check passes only when the store rules, the Simulator jobs for that event, and the Xcode 27.1 compiler check succeed. You can also start it from Actions → iOS tests → Run workflow.
 
 Simulator builds use ad-hoc signing so tests can exercise the real Keychain. Disabling signing prevents Keychain access; no signing certificates or developer team are required for these simulator tests.
 
