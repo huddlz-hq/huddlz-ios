@@ -99,15 +99,15 @@ jobs:
         # part skips all of those, so a new test class always runs there
         # without an edit here; it also runs the store rules inside the
         # Simulator. Timings are from November 9, 2026.
-        part: [maps-and-joining, rsvp-and-signup, account-and-tabs, everything-else]
+        part: [maps-and-joining, rsvp-and-signup, account-and-groups, everything-else]
     runs-on: macos-26
     timeout-minutes: 30
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
       PART: ${{ matrix.part }}
-      MAPS_AND_JOINING: DiscoveryVenueUITests JoiningUITests AgendaTabUITests
+      MAPS_AND_JOINING: DiscoveryVenueUITests JoiningUITests AgendaTabUITests TabsUITests DiscoveryPagingUITests
       RSVP_AND_SIGNUP: RSVPUITests RegistrationUITests SignupLocationUITests
-      ACCOUNT_AND_TABS: SignupCityUITests AccountUITests TabsUITests GroupsTabUITests
+      ACCOUNT_AND_GROUPS: SignupCityUITests AccountUITests GroupsTabUITests
     steps:
       - uses: actions/checkout@v7
         with:
@@ -144,7 +144,7 @@ jobs:
           ')"
           echo "HUDDLZ_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
           echo "data=$HOME/Library/Developer/CoreSimulator/Devices/$simulator_id" >> "$GITHUB_OUTPUT"
-          echo "key=booted-simulator-v2-$ImageOS-$ImageVersion-$simulator_id" >> "$GITHUB_OUTPUT"
+          echo "key=booted-simulator-v1-$ImageOS-$ImageVersion-$simulator_id" >> "$GITHUB_OUTPUT"
 
       - name: Restore booted Simulator data
         id: booted
@@ -155,19 +155,9 @@ jobs:
 
       - name: Boot Simulator for the first time
         if: steps.booted.outputs.cache-hit != 'true'
-        timeout-minutes: 20
-        env:
-          SIMCTL_CHILD_HUDDLZ_UI_HTTP_SCRIPT: "[]"
-          SIMCTL_CHILD_HUDDLZ_UI_SESSION_ID: first-launch
+        timeout-minutes: 15
         run: |
           xcrun simctl bootstatus "$HUDDLZ_SIMULATOR_ID" -b
-          # Measuring: does a launch before the save make later first launches quick?
-          app="$RUNNER_TEMP/HuddlzDerivedData/Build/Products/Debug-iphonesimulator/Huddlz.app"
-          time xcrun simctl install "$HUDDLZ_SIMULATOR_ID" "$app"
-          time xcrun simctl launch "$HUDDLZ_SIMULATOR_ID" com.huddlz.Huddlz
-          sleep 10
-          xcrun simctl terminate "$HUDDLZ_SIMULATOR_ID" com.huddlz.Huddlz
-          xcrun simctl uninstall "$HUDDLZ_SIMULATOR_ID" com.huddlz.Huddlz
           xcrun simctl shutdown "$HUDDLZ_SIMULATOR_ID"
 
       - name: Save booted Simulator data
@@ -192,15 +182,6 @@ jobs:
       # keeps it off the network, before the tests start their clock. The
       # permission service is as slow to wake: a test's own reset of location
       # access timed out at 30 seconds, so the first reset happens here too.
-      # Temporary: what uses the runner's three cores after a cached boot?
-      - name: Sample CPU after boot
-        run: |
-          (for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
-             date -u +%T
-             top -l 2 -n 12 -o cpu -stats pid,command,cpu,mem | tail -13
-             sleep 20
-           done > "$RUNNER_TEMP/cpu-samples.log" 2>&1 &)
-
       - name: Launch the app once
         timeout-minutes: 6
         env:
@@ -225,13 +206,13 @@ jobs:
           case "$PART" in
             maps-and-joining) journeys="$MAPS_AND_JOINING" ;;
             rsvp-and-signup) journeys="$RSVP_AND_SIGNUP" ;;
-            account-and-tabs) journeys="$ACCOUNT_AND_TABS" ;;
+            account-and-groups) journeys="$ACCOUNT_AND_GROUPS" ;;
             *) journeys="" ;;
           esac
           if [ -n "$journeys" ]; then
             for journey in $journeys; do selection+=("-only-testing:HuddlzUITests/$journey"); done
           else
-            for journey in $MAPS_AND_JOINING $RSVP_AND_SIGNUP $ACCOUNT_AND_TABS; do
+            for journey in $MAPS_AND_JOINING $RSVP_AND_SIGNUP $ACCOUNT_AND_GROUPS; do
               selection+=("-skip-testing:HuddlzUITests/$journey")
             done
           fi
@@ -246,10 +227,6 @@ jobs:
             -resultBundlePath "$RUNNER_TEMP/HuddlzTests.xcresult" \
             CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
             2>&1 | tee "$RUNNER_TEMP/xcodebuild.log"
-
-      - name: Show CPU samples
-        if: always()
-        run: cat "$RUNNER_TEMP/cpu-samples.log"
 
       - name: Verify test results
         run: |
