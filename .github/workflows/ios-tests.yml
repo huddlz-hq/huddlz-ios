@@ -175,10 +175,28 @@ jobs:
           du -sh "$HOME/Library/Developer/CoreSimulator/Devices/$HUDDLZ_SIMULATOR_ID"
           xcrun simctl bootstatus "$HUDDLZ_SIMULATOR_ID" -b | tail -3
 
+      # The first launch of any app on a Simulator that has just booted has
+      # taken over a minute on hosted runners. XCUITest gives a launch 60
+      # seconds, then xcodebuild hung on the next one until the job timed out.
+      # So the app launches once here, against an empty response script that
+      # keeps it off the network, before the tests start their clock.
+      - name: Launch the app once
+        timeout-minutes: 6
+        env:
+          SIMCTL_CHILD_HUDDLZ_UI_HTTP_SCRIPT: "[]"
+          SIMCTL_CHILD_HUDDLZ_UI_SESSION_ID: first-launch
+        run: |
+          app="$RUNNER_TEMP/HuddlzDerivedData/Build/Products/Debug-iphonesimulator/Huddlz.app"
+          time xcrun simctl install "$HUDDLZ_SIMULATOR_ID" "$app"
+          time xcrun simctl launch "$HUDDLZ_SIMULATOR_ID" com.huddlz.Huddlz
+          sleep 10
+          xcrun simctl terminate "$HUDDLZ_SIMULATOR_ID" com.huddlz.Huddlz
+
       # One booted Simulator per job, tests in sequence. Cloning Simulators for
       # parallel workers took over 12 minutes on hosted runners before the
       # first test ran, so the suite is split across jobs instead.
       - name: Run behavior tests
+        timeout-minutes: 15
         run: |
           set -o pipefail
           selection=()
