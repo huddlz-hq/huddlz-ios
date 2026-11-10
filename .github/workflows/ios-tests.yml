@@ -89,35 +89,25 @@ jobs:
           grep -Eq 'Test run with [1-9][0-9]* tests in [0-9]+ suites passed' "$RUNNER_TEMP/store-rules.log"
 
   test:
-    name: Behavior tests (${{ matrix.half }})
+    name: Behavior tests (${{ matrix.part }})
     strategy:
       fail-fast: false
       matrix:
-        # A pull request waits for the core journeys only. Every UI journey and
-        # the store rules again, inside the Simulator, run on each push to main.
-        half: ${{ fromJSON(github.event_name == 'pull_request' && '["core-journeys"]' || '["signup-and-rsvp","everything-else"]') }}
+        # Every UI journey runs on every pull request, split across four
+        # Simulators so no job runs more than about three minutes of tests.
+        # The first three parts each run only the classes they list. The last
+        # part skips all of those, so a new test class always runs there
+        # without an edit here; it also runs the store rules inside the
+        # Simulator. Timings are from November 9, 2026.
+        part: [maps-and-joining, rsvp-and-signup, account-and-tabs, everything-else]
     runs-on: macos-26
     timeout-minutes: 30
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
-      # The slowest UI journeys, about half of the suite's time. On main one job
-      # runs only these classes and the other skips them, so a new test class
-      # or Swift Testing suite always runs in the second job without an edit here.
-      SLOW_JOURNEYS: >-
-        HuddlzUITests/RegistrationUITests
-        HuddlzUITests/SignupCityUITests
-        HuddlzUITests/SignupLocationUITests
-        HuddlzUITests/RSVPUITests
-        HuddlzUITests/JoiningUITests
-        HuddlzUITests/DiscoveryVenueUITests
-      # One UI journey each for launching, signing in, finding a huddl,
-      # RSVPing, and creating an account.
-      CORE_JOURNEYS: >-
-        HuddlzUITests/TabsUITests/testLaunchingShowsDiscoverWithItsSearchFieldAndACollapsedTabPill
-        HuddlzUITests/AccountUITests/testSigningInReturnsToBrowsingAndShowsTheAccount
-        HuddlzUITests/DiscoveryUITests/testSearchingAndOpeningACardShowsCurrentDetailsWithoutSignIn
-        HuddlzUITests/RSVPUITests/testRSVPAndCancellationUpdateYourAttendance
-        HuddlzUITests/RegistrationUITests/testCreatingAnAccountRequiresAcceptanceAndReturnsToBrowsingWithASavedSession
+      PART: ${{ matrix.part }}
+      MAPS_AND_JOINING: DiscoveryVenueUITests JoiningUITests AgendaTabUITests
+      RSVP_AND_SIGNUP: RSVPUITests RegistrationUITests SignupLocationUITests
+      ACCOUNT_AND_TABS: SignupCityUITests AccountUITests TabsUITests GroupsTabUITests
     steps:
       - uses: actions/checkout@v7
         with:
@@ -187,24 +177,25 @@ jobs:
 
       # One booted Simulator per job, tests in sequence. Cloning Simulators for
       # parallel workers took over 12 minutes on hosted runners before the
-      # first test ran, so the full suite is split across two jobs instead.
+      # first test ran, so the suite is split across jobs instead.
       - name: Run behavior tests
-        env:
-          HALF: ${{ matrix.half }}
         run: |
           set -o pipefail
           selection=()
-          if [ "$HALF" = core-journeys ]; then
-            for test in $CORE_JOURNEYS; do selection+=("-only-testing:$test"); done
+          case "$PART" in
+            maps-and-joining) journeys="$MAPS_AND_JOINING" ;;
+            rsvp-and-signup) journeys="$RSVP_AND_SIGNUP" ;;
+            account-and-tabs) journeys="$ACCOUNT_AND_TABS" ;;
+            *) journeys="" ;;
+          esac
+          if [ -n "$journeys" ]; then
+            for journey in $journeys; do selection+=("-only-testing:HuddlzUITests/$journey"); done
           else
-            for journey in $SLOW_JOURNEYS; do
-              if [ "$HALF" = signup-and-rsvp ]; then
-                selection+=("-only-testing:$journey")
-              else
-                selection+=("-skip-testing:$journey")
-              fi
+            for journey in $MAPS_AND_JOINING $RSVP_AND_SIGNUP $ACCOUNT_AND_TABS; do
+              selection+=("-skip-testing:HuddlzUITests/$journey")
             done
           fi
+          printf '%s\n' "${selection[@]}"
           xcodebuild test-without-building \
             -project Huddlz/Huddlz.xcodeproj \
             -scheme Huddlz \
@@ -234,7 +225,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ios-test-results-${{ matrix.half }}
+          name: ios-test-results-${{ matrix.part }}
           path: |
             ${{ runner.temp }}/HuddlzTests.xcresult
             ${{ runner.temp }}/build.log
