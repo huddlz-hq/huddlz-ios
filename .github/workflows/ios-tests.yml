@@ -144,7 +144,7 @@ jobs:
           ')"
           echo "HUDDLZ_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
           echo "data=$HOME/Library/Developer/CoreSimulator/Devices/$simulator_id" >> "$GITHUB_OUTPUT"
-          echo "key=booted-simulator-v1-$ImageOS-$ImageVersion-$simulator_id" >> "$GITHUB_OUTPUT"
+          echo "key=booted-simulator-v2-$ImageOS-$ImageVersion-$simulator_id" >> "$GITHUB_OUTPUT"
 
       - name: Restore booted Simulator data
         id: booted
@@ -155,9 +155,19 @@ jobs:
 
       - name: Boot Simulator for the first time
         if: steps.booted.outputs.cache-hit != 'true'
-        timeout-minutes: 15
+        timeout-minutes: 20
+        env:
+          SIMCTL_CHILD_HUDDLZ_UI_HTTP_SCRIPT: "[]"
+          SIMCTL_CHILD_HUDDLZ_UI_SESSION_ID: first-launch
         run: |
           xcrun simctl bootstatus "$HUDDLZ_SIMULATOR_ID" -b
+          # Measuring: does a launch before the save make later first launches quick?
+          app="$RUNNER_TEMP/HuddlzDerivedData/Build/Products/Debug-iphonesimulator/Huddlz.app"
+          time xcrun simctl install "$HUDDLZ_SIMULATOR_ID" "$app"
+          time xcrun simctl launch "$HUDDLZ_SIMULATOR_ID" com.huddlz.Huddlz
+          sleep 10
+          xcrun simctl terminate "$HUDDLZ_SIMULATOR_ID" com.huddlz.Huddlz
+          xcrun simctl uninstall "$HUDDLZ_SIMULATOR_ID" com.huddlz.Huddlz
           xcrun simctl shutdown "$HUDDLZ_SIMULATOR_ID"
 
       - name: Save booted Simulator data
