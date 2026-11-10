@@ -85,20 +85,23 @@ jobs:
         run: |
           set -o pipefail
           swift --version
-          swift test 2>&1 | tee "$RUNNER_TEMP/store-rules.log" | grep -E 'error|✘|✔ Test run|Test run|Compiling|Build complete|recorded an issue' | awk '!seen[$0]++' | tail -150
+          swift test 2>&1 | tee "$RUNNER_TEMP/store-rules.log"
+          grep -Eq 'Test run with [1-9][0-9]* tests in [0-9]+ suites passed' "$RUNNER_TEMP/store-rules.log"
 
   test:
     name: Behavior tests (${{ matrix.half }})
     strategy:
       fail-fast: false
       matrix:
-        half: [quick]
+        # A pull request waits for the core journeys only. Every UI journey and
+        # the store rules again, inside the Simulator, run on each push to main.
+        half: ${{ fromJSON(github.event_name == 'pull_request' && '["core-journeys"]' || '["signup-and-rsvp","everything-else"]') }}
     runs-on: macos-26
     timeout-minutes: 30
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
-      # The slowest UI journeys, about half of the suite's time. The first job
-      # runs only these classes and the second skips them, so a new test class
+      # The slowest UI journeys, about half of the suite's time. On main one job
+      # runs only these classes and the other skips them, so a new test class
       # or Swift Testing suite always runs in the second job without an edit here.
       SLOW_JOURNEYS: >-
         HuddlzUITests/RegistrationUITests
@@ -107,10 +110,9 @@ jobs:
         HuddlzUITests/RSVPUITests
         HuddlzUITests/JoiningUITests
         HuddlzUITests/DiscoveryVenueUITests
-      # The quick job: every Swift Testing rule plus one UI journey each for
-      # launching, signing in, finding a huddl, RSVPing, and creating an account.
-      QUICK: >-
-        HuddlzTests
+      # One UI journey each for launching, signing in, finding a huddl,
+      # RSVPing, and creating an account.
+      CORE_JOURNEYS: >-
         HuddlzUITests/TabsUITests/testLaunchingShowsDiscoverWithItsSearchFieldAndACollapsedTabPill
         HuddlzUITests/AccountUITests/testSigningInReturnsToBrowsingAndShowsTheAccount
         HuddlzUITests/DiscoveryUITests/testSearchingAndOpeningACardShowsCurrentDetailsWithoutSignIn
@@ -185,15 +187,15 @@ jobs:
 
       # One booted Simulator per job, tests in sequence. Cloning Simulators for
       # parallel workers took over 12 minutes on hosted runners before the
-      # first test ran, so the suite is split across two jobs instead.
+      # first test ran, so the full suite is split across two jobs instead.
       - name: Run behavior tests
         env:
           HALF: ${{ matrix.half }}
         run: |
           set -o pipefail
           selection=()
-          if [ "$HALF" = quick ]; then
-            for test in $QUICK; do selection+=("-only-testing:$test"); done
+          if [ "$HALF" = core-journeys ]; then
+            for test in $CORE_JOURNEYS; do selection+=("-only-testing:$test"); done
           else
             for journey in $SLOW_JOURNEYS; do
               if [ "$HALF" = signup-and-rsvp ]; then
@@ -243,13 +245,15 @@ jobs:
   required-tests:
     name: Native behavior tests
     runs-on: ubuntu-latest
-    needs: [test, latest-toolchain]
+    needs: [store-rules, test, latest-toolchain]
     if: always()
     steps:
       - name: Require the behavior tests and compiler check to pass
         env:
+          STORE_RULES_RESULT: ${{ needs.store-rules.result }}
           TEST_RESULT: ${{ needs.test.result }}
           COMPILER_RESULT: ${{ needs.latest-toolchain.result }}
         run: |
+          test "$STORE_RULES_RESULT" = success
           test "$TEST_RESULT" = success
           test "$COMPILER_RESULT" = success

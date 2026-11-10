@@ -87,7 +87,7 @@ The registration API still returns internal multiline exception descriptions for
 
 ## Behavior tests
 
-Run the full local suite with `./scripts/test-behaviors.sh`. It uses four simulator workers, keeps build products between runs, and prints the elapsed time and paths to the log and result bundle. No tests are excluded. Use `HUDDLZ_TEST_WORKERS=2 ./scripts/test-behaviors.sh` on a Mac with less CPU or memory. Override `HUDDLZ_TEST_DESTINATION` or `HUDDLZ_TEST_DERIVED_DATA` when needed.
+Run the store rules with `swift test` from the repository root. It needs no Simulator and takes seconds: the root `Package.swift` compiles every app file that does not import SwiftUI, so keep stores, clients, and models in files of their own, apart from views. Run the full local suite, UI journeys included, with `./scripts/test-behaviors.sh`. It uses four simulator workers, keeps build products between runs, and prints the elapsed time and paths to the log and result bundle. No tests are excluded. Use `HUDDLZ_TEST_WORKERS=2 ./scripts/test-behaviors.sh` on a Mac with less CPU or memory. Override `HUDDLZ_TEST_DESTINATION` or `HUDDLZ_TEST_DERIVED_DATA` when needed.
 
 For focused work, pass Xcode test selections: `./scripts/test-behaviors.sh -only-testing:HuddlzUITests/RSVPUITests` or `./scripts/test-behaviors.sh -only-testing:HuddlzTests/RSVPBehaviorTests`. Command-U also runs the full suite; the shared scheme allows parallel UI execution. Discovery journeys are split into browsing, pagination/refresh, location, venue, and artwork classes so Xcode can distribute them independently. Registration, manual city selection, and location-permission journeys also have separate classes. Test names describe the behavior they protect.
 
@@ -125,7 +125,13 @@ Search-badge tests cover going, waitlisted, and unmarked cards, foreground and p
 
 ## Continuous integration
 
-GitHub Actions runs the full native test suite for pull requests into main and pushes to main. Two macOS jobs each build the tests, boot one Simulator, and run half of the suite on it in sequence. The first job runs the slowest UI journeys, listed as `SLOW_JOURNEYS` in the workflow; the second runs everything else, including the Swift Testing suites and any new test class. Each job builds before it boots the Simulator, because a booting Simulator slows the build sixfold. Cloning Simulators for parallel workers took longer on hosted runners than the whole serial run. Each job must pass with no skips. The required “Native behavior tests” check passes only when both jobs and the Xcode 27.1 compiler check succeed. You can also start it from Actions → iOS tests → Run workflow.
+GitHub Actions runs three kinds of job, measured on November 9, 2026 on free hosted runners:
+
+- **Store rules** (1m20s) runs `swift test` on the Mac with no Simulator: the 90 Swift Testing rules, on every pull request and every push to main.
+- **Core journeys** (about 6 minutes) runs five UI journeys on one Simulator for every pull request: launching, signing in, searching and opening a huddl, RSVPing, and creating an account. They are listed as `CORE_JOURNEYS` in the workflow.
+- **The full suite** (about 14 minutes) runs on every push to main in two Simulator jobs: every UI journey, and the store rules again inside the Simulator. One job runs the slowest journeys, listed as `SLOW_JOURNEYS`; the other runs everything else, including any new test class. A UI journey outside the core five can therefore break on main after a merge; fix or revert it there.
+
+Each Simulator job builds before it boots, because a booting Simulator slows the build sixfold. A hosted runner's Simulator has never booted, and its first boot took 1 to 8 minutes, so one run caches the booted Simulator's data and later runs on the same runner image restore it. Cloning Simulators for parallel workers took longer on hosted runners than the whole serial run. Each job must pass with no skips. The required “Native behavior tests” check passes only when the store rules, the Simulator jobs for that event, and the Xcode 27.1 compiler check succeed. You can also start the full suite from Actions → iOS tests → Run workflow.
 
 Simulator builds use ad-hoc signing so tests can exercise the real Keychain. Disabling signing prevents Keychain access; no signing certificates or developer team are required for these simulator tests.
 
