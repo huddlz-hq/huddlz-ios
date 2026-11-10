@@ -113,6 +113,21 @@ jobs:
         with:
           persist-credentials: false
 
+      # Build before booting. A booting Simulator takes the runner's three
+      # cores, and building beside it took six minutes instead of one.
+      - name: Build tests
+        run: |
+          set -o pipefail
+          xcodebuild -version
+          xcodebuild build-for-testing \
+            -project Huddlz/Huddlz.xcodeproj \
+            -scheme Huddlz \
+            -destination 'generic/platform=iOS Simulator' \
+            ARCHS="$(uname -m)" \
+            -derivedDataPath "$RUNNER_TEMP/HuddlzDerivedData" \
+            CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
+            2>&1 | tee "$RUNNER_TEMP/build.log"
+
       # A hosted runner's Simulator has never booted. Its first boot builds
       # 1.3 GB of device data and took 1 to 8 minutes of the runner's three
       # cores, and the first tests then ran beside the leftover work. So one
@@ -129,7 +144,7 @@ jobs:
           ')"
           echo "HUDDLZ_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
           echo "data=$HOME/Library/Developer/CoreSimulator/Devices/$simulator_id" >> "$GITHUB_OUTPUT"
-          echo "key=booted-simulator-v1-$ImageOS-$ImageVersion-$simulator_id" >> "$GITHUB_OUTPUT"
+          echo "key=booted-simulator-v2-$ImageOS-$ImageVersion-$simulator_id" >> "$GITHUB_OUTPUT"
 
       - name: Restore booted Simulator data
         id: booted
@@ -140,9 +155,19 @@ jobs:
 
       - name: Boot Simulator for the first time
         if: steps.booted.outputs.cache-hit != 'true'
-        timeout-minutes: 15
+        timeout-minutes: 20
+        env:
+          SIMCTL_CHILD_HUDDLZ_UI_HTTP_SCRIPT: "[]"
+          SIMCTL_CHILD_HUDDLZ_UI_SESSION_ID: first-launch
         run: |
           xcrun simctl bootstatus "$HUDDLZ_SIMULATOR_ID" -b
+          # Measuring: does a launch before the save make later first launches quick?
+          app="$RUNNER_TEMP/HuddlzDerivedData/Build/Products/Debug-iphonesimulator/Huddlz.app"
+          time xcrun simctl install "$HUDDLZ_SIMULATOR_ID" "$app"
+          time xcrun simctl launch "$HUDDLZ_SIMULATOR_ID" com.huddlz.Huddlz
+          sleep 10
+          xcrun simctl terminate "$HUDDLZ_SIMULATOR_ID" com.huddlz.Huddlz
+          xcrun simctl uninstall "$HUDDLZ_SIMULATOR_ID" com.huddlz.Huddlz
           xcrun simctl shutdown "$HUDDLZ_SIMULATOR_ID"
 
       - name: Save booted Simulator data
@@ -152,33 +177,13 @@ jobs:
           path: ${{ steps.simulator.outputs.data }}
           key: ${{ steps.simulator.outputs.key }}
 
-      # The cached Simulator boots in the background while the tests build,
-      # and has that minute to settle before the app is installed. Only a
-      # first boot is heavy enough to slow the build, and that has finished
-      # or been restored by now.
       - name: Start Simulator
+        timeout-minutes: 15
         run: |
           # CoreSimulator read the device before its data was restored.
           killall -9 com.apple.CoreSimulator.CoreSimulatorService 2> /dev/null || true
           du -sh "$HOME/Library/Developer/CoreSimulator/Devices/$HUDDLZ_SIMULATOR_ID"
-          xcrun simctl boot "$HUDDLZ_SIMULATOR_ID"
-
-      - name: Build tests
-        run: |
-          set -o pipefail
-          xcodebuild -version
-          xcodebuild build-for-testing \
-            -project Huddlz/Huddlz.xcodeproj \
-            -scheme Huddlz \
-            -destination 'generic/platform=iOS Simulator' \
-            ARCHS="$(uname -m)" \
-            -derivedDataPath "$RUNNER_TEMP/HuddlzDerivedData" \
-            CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
-            2>&1 | tee "$RUNNER_TEMP/build.log"
-
-      - name: Wait for Simulator
-        timeout-minutes: 15
-        run: xcrun simctl bootstatus "$HUDDLZ_SIMULATOR_ID" -b | tail -3
+          xcrun simctl bootstatus "$HUDDLZ_SIMULATOR_ID" -b | tail -3
 
       # The first launch of any app on a Simulator that has just booted has
       # taken over a minute on hosted runners. XCUITest gives a launch 60
