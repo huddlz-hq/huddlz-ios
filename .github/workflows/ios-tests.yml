@@ -85,7 +85,7 @@ jobs:
         run: |
           set -o pipefail
           swift --version
-          swift test 2>&1 | tee "$RUNNER_TEMP/store-rules.log" | tail -300
+          swift test 2>&1 | tee "$RUNNER_TEMP/store-rules.log" | grep -E 'error|✘|✔ Test run|Test run|Compiling|Build complete|recorded an issue' | awk '!seen[$0]++' | tail -150
 
   test:
     name: Behavior tests (${{ matrix.half }})
