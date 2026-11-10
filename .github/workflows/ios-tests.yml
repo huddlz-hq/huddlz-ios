@@ -99,15 +99,15 @@ jobs:
         # part skips all of those, so a new test class always runs there
         # without an edit here; it also runs the store rules inside the
         # Simulator. Timings are from November 9, 2026.
-        part: [maps-and-joining, rsvp-and-signup, account-and-tabs, everything-else]
+        part: [maps-and-joining, rsvp-and-signup, account-and-groups, everything-else]
     runs-on: macos-26
     timeout-minutes: 30
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
       PART: ${{ matrix.part }}
-      MAPS_AND_JOINING: DiscoveryVenueUITests JoiningUITests AgendaTabUITests
+      MAPS_AND_JOINING: DiscoveryVenueUITests JoiningUITests AgendaTabUITests TabsUITests DiscoveryPagingUITests
       RSVP_AND_SIGNUP: RSVPUITests RegistrationUITests SignupLocationUITests
-      ACCOUNT_AND_TABS: SignupCityUITests AccountUITests TabsUITests GroupsTabUITests
+      ACCOUNT_AND_GROUPS: SignupCityUITests AccountUITests GroupsTabUITests
     steps:
       - uses: actions/checkout@v7
         with:
@@ -179,7 +179,9 @@ jobs:
       # taken over a minute on hosted runners. XCUITest gives a launch 60
       # seconds, then xcodebuild hung on the next one until the job timed out.
       # So the app launches once here, against an empty response script that
-      # keeps it off the network, before the tests start their clock.
+      # keeps it off the network, before the tests start their clock. The
+      # permission service is as slow to wake: a test's own reset of location
+      # access timed out at 30 seconds, so the first reset happens here too.
       - name: Launch the app once
         timeout-minutes: 6
         env:
@@ -189,6 +191,7 @@ jobs:
           app="$RUNNER_TEMP/HuddlzDerivedData/Build/Products/Debug-iphonesimulator/Huddlz.app"
           time xcrun simctl install "$HUDDLZ_SIMULATOR_ID" "$app"
           time xcrun simctl launch "$HUDDLZ_SIMULATOR_ID" com.huddlz.Huddlz
+          time xcrun simctl privacy "$HUDDLZ_SIMULATOR_ID" reset location com.huddlz.Huddlz
           sleep 10
           xcrun simctl terminate "$HUDDLZ_SIMULATOR_ID" com.huddlz.Huddlz
 
@@ -203,13 +206,13 @@ jobs:
           case "$PART" in
             maps-and-joining) journeys="$MAPS_AND_JOINING" ;;
             rsvp-and-signup) journeys="$RSVP_AND_SIGNUP" ;;
-            account-and-tabs) journeys="$ACCOUNT_AND_TABS" ;;
+            account-and-groups) journeys="$ACCOUNT_AND_GROUPS" ;;
             *) journeys="" ;;
           esac
           if [ -n "$journeys" ]; then
             for journey in $journeys; do selection+=("-only-testing:HuddlzUITests/$journey"); done
           else
-            for journey in $MAPS_AND_JOINING $RSVP_AND_SIGNUP $ACCOUNT_AND_TABS; do
+            for journey in $MAPS_AND_JOINING $RSVP_AND_SIGNUP $ACCOUNT_AND_GROUPS; do
               selection+=("-skip-testing:HuddlzUITests/$journey")
             done
           fi
