@@ -184,7 +184,9 @@ jobs:
       # taken over a minute on hosted runners. XCUITest gives a launch 60
       # seconds, then xcodebuild hung on the next one until the job timed out.
       # So the app launches once here, against an empty response script that
-      # keeps it off the network, before the tests start their clock.
+      # keeps it off the network, before the tests start their clock. The
+      # permission service is as slow to wake: a test's own reset of location
+      # access timed out at 30 seconds, so the first reset happens here too.
       - name: Launch the app once
         timeout-minutes: 6
         env:
@@ -194,6 +196,7 @@ jobs:
           app="$RUNNER_TEMP/HuddlzDerivedData/Build/Products/Debug-iphonesimulator/Huddlz.app"
           time xcrun simctl install "$HUDDLZ_SIMULATOR_ID" "$app"
           time xcrun simctl launch "$HUDDLZ_SIMULATOR_ID" com.huddlz.Huddlz
+          time xcrun simctl privacy "$HUDDLZ_SIMULATOR_ID" reset location com.huddlz.Huddlz
           sleep 10
           xcrun simctl terminate "$HUDDLZ_SIMULATOR_ID" com.huddlz.Huddlz
 
