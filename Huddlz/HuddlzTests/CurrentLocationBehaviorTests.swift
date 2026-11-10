@@ -3,6 +3,15 @@ import Foundation
 import Testing
 @testable import Huddlz
 
+extension CLAuthorizationStatus {
+    /// What "Allow While Using App" grants. The Mac has no such status, and these rules also run there.
+    #if os(macOS)
+    static let allowedWhileUsing = CLAuthorizationStatus.authorizedAlways
+    #else
+    static let allowedWhileUsing = CLAuthorizationStatus.authorizedWhenInUse
+    #endif
+}
+
 /// Replaces only Core Location: permission answers and location fixes come from the test.
 nonisolated final class SimulatedLocationManager: CLLocationManager {
     var status: CLAuthorizationStatus
@@ -10,7 +19,7 @@ nonisolated final class SimulatedLocationManager: CLLocationManager {
     var fixes: [Result<CLLocation, CLError>]
     private(set) var permissionRequests = 0
 
-    init(status: CLAuthorizationStatus, answer: CLAuthorizationStatus = .authorizedWhenInUse,
+    init(status: CLAuthorizationStatus, answer: CLAuthorizationStatus = .allowedWhileUsing,
          fixes: [Result<CLLocation, CLError>]) {
         self.status = status
         self.answer = answer
@@ -67,7 +76,7 @@ struct CurrentLocationBehaviorTests {
 
     @Test("An unavailable location can be retried")
     func unavailableLocationCanRetry() {
-        let manager = SimulatedLocationManager(status: .authorizedWhenInUse,
+        let manager = SimulatedLocationManager(status: .allowedWhileUsing,
                                                fixes: [.failure(CLError(.locationUnknown)), .success(Self.staugustine)])
         let location = CurrentLocationStore(manager: manager)
         location.request()
@@ -86,7 +95,7 @@ struct CurrentLocationBehaviorTests {
         let invalid = CLLocation(coordinate: Self.staugustine.coordinate, altitude: 0, horizontalAccuracy: -1,
                                  verticalAccuracy: 10, timestamp: .now)
         for fix in [stale, invalid] {
-            let location = CurrentLocationStore(manager: SimulatedLocationManager(status: .authorizedWhenInUse, fixes: [.success(fix)]))
+            let location = CurrentLocationStore(manager: SimulatedLocationManager(status: .allowedWhileUsing, fixes: [.success(fix)]))
             location.request()
             #expect(location.place == nil)
             #expect(location.errorMessage == "Your location couldn’t be found. Try again or search for a city or postal code.")
