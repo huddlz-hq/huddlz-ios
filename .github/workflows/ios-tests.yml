@@ -187,6 +187,15 @@ jobs:
       # keeps it off the network, before the tests start their clock. The
       # permission service is as slow to wake: a test's own reset of location
       # access timed out at 30 seconds, so the first reset happens here too.
+      # Temporary: what uses the runner's three cores after a cached boot?
+      - name: Sample CPU after boot
+        run: |
+          (for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+             date -u +%T
+             top -l 2 -n 12 -o cpu -stats pid,command,cpu,mem | tail -13
+             sleep 20
+           done > "$RUNNER_TEMP/cpu-samples.log" 2>&1 &)
+
       - name: Launch the app once
         timeout-minutes: 6
         env:
@@ -232,6 +241,10 @@ jobs:
             -resultBundlePath "$RUNNER_TEMP/HuddlzTests.xcresult" \
             CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
             2>&1 | tee "$RUNNER_TEMP/xcodebuild.log"
+
+      - name: Show CPU samples
+        if: always()
+        run: cat "$RUNNER_TEMP/cpu-samples.log"
 
       - name: Verify test results
         run: |
