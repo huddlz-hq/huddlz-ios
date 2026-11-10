@@ -183,23 +183,6 @@ jobs:
           du -sh "$HOME/Library/Developer/CoreSimulator/Devices/$HUDDLZ_SIMULATOR_ID"
           xcrun simctl bootstatus "$HUDDLZ_SIMULATOR_ID" -b | tail -3
 
-      # Experiment: a Simulator that has just booted spends minutes of the
-      # runner's three cores on stock widgets and background services. Stop
-      # the ones no test needs and see what the launch and the tests gain.
-      - name: Quiet the Simulator
-        timeout-minutes: 3
-        run: |
-          busy() { ps -Ao %cpu,comm -r | grep CoreSimulator | head -12 | sed -E 's#^ *([0-9.]+) .*/#\1 #' || true; }
-          echo "Busiest Simulator processes before:"; busy
-          noisy='news|health|fitcore|fitness|amsengagement|shortcut|people|chronod|widget|weather|stocks|tips|calendar'
-          domain="user/501"
-          xcrun simctl spawn "$HUDDLZ_SIMULATOR_ID" launchctl print "$domain" 2> /dev/null |
-            grep -Eo 'com\.apple\.[A-Za-z0-9._-]+' | sort -u | grep -Ei "$noisy" > "$RUNNER_TEMP/noisy-services" || true
-          echo "$(wc -l < "$RUNNER_TEMP/noisy-services") services to stop"
-          time xargs -P 12 -I{} sh -c "xcrun simctl spawn $HUDDLZ_SIMULATOR_ID launchctl bootout $domain/{} 2> /dev/null || true" < "$RUNNER_TEMP/noisy-services"
-          sleep 5
-          echo "Busiest Simulator processes after:"; busy
-
       # The first launch of any app on a Simulator that has just booted has
       # taken over a minute on hosted runners. XCUITest gives a launch 60
       # seconds, then xcodebuild hung on the next one until the job timed out.
