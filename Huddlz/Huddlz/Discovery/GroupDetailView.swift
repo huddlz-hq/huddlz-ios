@@ -1,16 +1,5 @@
 import SwiftUI
 
-struct HostingGroup: Decodable, Identifiable {
-    let id: String
-    let attributes: Attributes
-
-    struct Attributes: Decodable {
-        let name: String
-        let description: String?
-        let location: String?
-    }
-}
-
 struct GroupDetailView: View {
     let id: String
     @State private var store: GroupDetailStore

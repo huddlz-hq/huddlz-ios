@@ -68,10 +68,12 @@ jobs:
             ${{ runner.temp }}/latest-release-build.log
           retention-days: 7
 
-  test:
-    name: Behavior tests
+  # The store rules compile and run on the Mac itself, so they need no
+  # Simulator and finish before the UI jobs have booted one.
+  store-rules:
+    name: Store rules
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 10
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     steps:
@@ -79,21 +81,44 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Start Simulator
-        timeout-minutes: 2
-        run: |
-          xcodebuild -version
-          simulator_id="$(xcrun simctl list devices available --json | jq -er '
-            .devices["com.apple.CoreSimulator.SimRuntime.iOS-26-5"]
-            | map(select(.name == "iPhone 17"))
-            | if length == 1 then .[0].udid else error("Expected one iPhone 17 simulator") end
-          ')"
-          xcrun simctl boot "$simulator_id"
-          echo "HUDDLZ_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
-
-      - name: Build tests while Simulator starts
+      - name: Run store rules
         run: |
           set -o pipefail
+          swift --version
+          swift test 2>&1 | tee "$RUNNER_TEMP/store-rules.log"
+          grep -Eq 'Test run with [1-9][0-9]* tests in [0-9]+ suites passed' "$RUNNER_TEMP/store-rules.log"
+
+  test:
+    name: Behavior tests (${{ matrix.part }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # Every UI journey runs on every pull request, split across four
+        # Simulators so no job runs more than about three minutes of tests.
+        # The first three parts each run only the classes they list. The last
+        # part skips all of those, so a new test class always runs there
+        # without an edit here; it also runs the store rules inside the
+        # Simulator. Timings are from November 9, 2026.
+        part: [maps-and-joining, rsvp-and-signup, account-and-tabs, everything-else]
+    runs-on: macos-26
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      PART: ${{ matrix.part }}
+      MAPS_AND_JOINING: DiscoveryVenueUITests JoiningUITests AgendaTabUITests
+      RSVP_AND_SIGNUP: RSVPUITests RegistrationUITests SignupLocationUITests
+      ACCOUNT_AND_TABS: SignupCityUITests AccountUITests TabsUITests GroupsTabUITests
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # Build before booting. A booting Simulator takes the runner's three
+      # cores, and building beside it took six minutes instead of one.
+      - name: Build tests
+        run: |
+          set -o pipefail
+          xcodebuild -version
           xcodebuild build-for-testing \
             -project Huddlz/Huddlz.xcodeproj \
             -scheme Huddlz \
@@ -103,21 +128,98 @@ jobs:
             CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
             2>&1 | tee "$RUNNER_TEMP/build.log"
 
-      - name: Wait for Simulator readiness
-        timeout-minutes: 5
-        run: xcrun simctl bootstatus "$HUDDLZ_SIMULATOR_ID" -b
+      # A hosted runner's Simulator has never booted. Its first boot builds
+      # 1.3 GB of device data and took 1 to 8 minutes of the runner's three
+      # cores, and the first tests then ran beside the leftover work. So one
+      # run boots the Simulator, shuts it down, and caches its data; later
+      # runs on the same runner image restore it and boot in seconds.
+      - name: Find Simulator
+        id: simulator
+        run: |
+          sudo mdutil -a -i off > /dev/null 2>&1 || true
+          simulator_id="$(xcrun simctl list devices available --json | jq -er '
+            .devices["com.apple.CoreSimulator.SimRuntime.iOS-26-5"]
+            | map(select(.name == "iPhone 17"))
+            | if length == 1 then .[0].udid else error("Expected one iPhone 17 simulator") end
+          ')"
+          echo "HUDDLZ_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
+          echo "data=$HOME/Library/Developer/CoreSimulator/Devices/$simulator_id" >> "$GITHUB_OUTPUT"
+          echo "key=booted-simulator-v1-$ImageOS-$ImageVersion-$simulator_id" >> "$GITHUB_OUTPUT"
 
-      # One booted Simulator, tests in sequence. Cloning Simulators for
+      - name: Restore booted Simulator data
+        id: booted
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ steps.simulator.outputs.data }}
+          key: ${{ steps.simulator.outputs.key }}
+
+      - name: Boot Simulator for the first time
+        if: steps.booted.outputs.cache-hit != 'true'
+        timeout-minutes: 15
+        run: |
+          xcrun simctl bootstatus "$HUDDLZ_SIMULATOR_ID" -b
+          xcrun simctl shutdown "$HUDDLZ_SIMULATOR_ID"
+
+      - name: Save booted Simulator data
+        if: steps.booted.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ steps.simulator.outputs.data }}
+          key: ${{ steps.simulator.outputs.key }}
+
+      - name: Start Simulator
+        timeout-minutes: 15
+        run: |
+          # CoreSimulator read the device before its data was restored.
+          killall -9 com.apple.CoreSimulator.CoreSimulatorService 2> /dev/null || true
+          du -sh "$HOME/Library/Developer/CoreSimulator/Devices/$HUDDLZ_SIMULATOR_ID"
+          xcrun simctl bootstatus "$HUDDLZ_SIMULATOR_ID" -b | tail -3
+
+      # The first launch of any app on a Simulator that has just booted has
+      # taken over a minute on hosted runners. XCUITest gives a launch 60
+      # seconds, then xcodebuild hung on the next one until the job timed out.
+      # So the app launches once here, against an empty response script that
+      # keeps it off the network, before the tests start their clock.
+      - name: Launch the app once
+        timeout-minutes: 6
+        env:
+          SIMCTL_CHILD_HUDDLZ_UI_HTTP_SCRIPT: "[]"
+          SIMCTL_CHILD_HUDDLZ_UI_SESSION_ID: first-launch
+        run: |
+          app="$RUNNER_TEMP/HuddlzDerivedData/Build/Products/Debug-iphonesimulator/Huddlz.app"
+          time xcrun simctl install "$HUDDLZ_SIMULATOR_ID" "$app"
+          time xcrun simctl launch "$HUDDLZ_SIMULATOR_ID" com.huddlz.Huddlz
+          sleep 10
+          xcrun simctl terminate "$HUDDLZ_SIMULATOR_ID" com.huddlz.Huddlz
+
+      # One booted Simulator per job, tests in sequence. Cloning Simulators for
       # parallel workers took over 12 minutes on hosted runners before the
-      # first test ran, longer than the whole serial suite.
+      # first test ran, so the suite is split across jobs instead.
       - name: Run behavior tests
+        timeout-minutes: 15
         run: |
           set -o pipefail
+          selection=()
+          case "$PART" in
+            maps-and-joining) journeys="$MAPS_AND_JOINING" ;;
+            rsvp-and-signup) journeys="$RSVP_AND_SIGNUP" ;;
+            account-and-tabs) journeys="$ACCOUNT_AND_TABS" ;;
+            *) journeys="" ;;
+          esac
+          if [ -n "$journeys" ]; then
+            for journey in $journeys; do selection+=("-only-testing:HuddlzUITests/$journey"); done
+          else
+            for journey in $MAPS_AND_JOINING $RSVP_AND_SIGNUP $ACCOUNT_AND_TABS; do
+              selection+=("-skip-testing:HuddlzUITests/$journey")
+            done
+          fi
+          printf '%s\n' "${selection[@]}"
           xcodebuild test-without-building \
             -project Huddlz/Huddlz.xcodeproj \
             -scheme Huddlz \
             -destination "platform=iOS Simulator,id=$HUDDLZ_SIMULATOR_ID" \
             -parallel-testing-enabled NO \
+            "${selection[@]}" \
             -derivedDataPath "$RUNNER_TEMP/HuddlzDerivedData" \
             -resultBundlePath "$RUNNER_TEMP/HuddlzTests.xcresult" \
             CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
@@ -141,7 +243,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ios-test-results
+          name: ios-test-results-${{ matrix.part }}
           path: |
             ${{ runner.temp }}/HuddlzTests.xcresult
             ${{ runner.temp }}/build.log
@@ -152,13 +254,15 @@ jobs:
   required-tests:
     name: Native behavior tests
     runs-on: ubuntu-latest
-    needs: [test, latest-toolchain]
+    needs: [store-rules, test, latest-toolchain]
     if: always()
     steps:
       - name: Require the behavior tests and compiler check to pass
         env:
+          STORE_RULES_RESULT: ${{ needs.store-rules.result }}
           TEST_RESULT: ${{ needs.test.result }}
           COMPILER_RESULT: ${{ needs.latest-toolchain.result }}
         run: |
+          test "$STORE_RULES_RESULT" = success
           test "$TEST_RESULT" = success
           test "$COMPILER_RESULT" = success

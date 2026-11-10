@@ -87,7 +87,7 @@ The registration API still returns internal multiline exception descriptions for
 
 ## Behavior tests
 
-Run the full local suite with `./scripts/test-behaviors.sh`. It uses four simulator workers, keeps build products between runs, and prints the elapsed time and paths to the log and result bundle. No tests are excluded. Use `HUDDLZ_TEST_WORKERS=2 ./scripts/test-behaviors.sh` on a Mac with less CPU or memory. Override `HUDDLZ_TEST_DESTINATION` or `HUDDLZ_TEST_DERIVED_DATA` when needed.
+Run the store rules with `swift test` from the repository root. It needs no Simulator and takes seconds: the root `Package.swift` compiles every app file that does not import SwiftUI, so keep stores, clients, and models in files of their own, apart from views. Run the full local suite, UI journeys included, with `./scripts/test-behaviors.sh`. It uses four simulator workers, keeps build products between runs, and prints the elapsed time and paths to the log and result bundle. No tests are excluded. Use `HUDDLZ_TEST_WORKERS=2 ./scripts/test-behaviors.sh` on a Mac with less CPU or memory. Override `HUDDLZ_TEST_DESTINATION` or `HUDDLZ_TEST_DERIVED_DATA` when needed.
 
 For focused work, pass Xcode test selections: `./scripts/test-behaviors.sh -only-testing:HuddlzUITests/RSVPUITests` or `./scripts/test-behaviors.sh -only-testing:HuddlzTests/RSVPBehaviorTests`. Command-U also runs the full suite; the shared scheme allows parallel UI execution. Discovery journeys are split into browsing, pagination/refresh, location, venue, and artwork classes so Xcode can distribute them independently. Registration, manual city selection, and location-permission journeys also have separate classes. Test names describe the behavior they protect.
 
@@ -125,7 +125,12 @@ Search-badge tests cover going, waitlisted, and unmarked cards, foreground and p
 
 ## Continuous integration
 
-GitHub Actions runs the full native test suite for pull requests into main and pushes to main. One macOS job builds the tests, boots one Simulator while it builds, then runs every test on it in sequence. Cloning Simulators for parallel workers took longer on hosted runners than the whole serial run. macOS runners are scarce, so a single job means each run waits for a runner once; most of the suite is Swift Testing and finishes in under a second. The suite must pass with no skips. The required “Native behavior tests” check passes only when that job and the Xcode 27.1 compiler check succeed. You can also start it from Actions → iOS tests → Run workflow.
+GitHub Actions runs every test for pull requests into main and pushes to main, split so that nothing waits on a long job:
+
+- **Store rules** (1m20s on November 9, 2026) runs `swift test` on the Mac with no Simulator: the 90 Swift Testing rules.
+- **Behavior tests** runs every UI journey across four Simulator jobs side by side, each with about three minutes of tests. The first three jobs run the classes listed for them in the workflow; the last, `everything-else`, skips those classes, so a new test class runs there without an edit. It also runs the store rules again inside the Simulator.
+
+Each Simulator job builds before it boots, because a booting Simulator slows the build sixfold. A hosted runner's Simulator has never booted, and its first boot took 1 to 8 minutes, so one run caches the booted Simulator's data and later runs on the same runner image restore it. Cloning Simulators for parallel workers took longer on hosted runners than the whole serial run. Each job must pass with no skips. The required “Native behavior tests” check passes only when the store rules, all four Simulator jobs, and the Xcode 27.1 compiler check succeed. You can also start it from Actions → iOS tests → Run workflow.
 
 Simulator builds use ad-hoc signing so tests can exercise the real Keychain. Disabling signing prevents Keychain access; no signing certificates or developer team are required for these simulator tests.
 
@@ -135,7 +140,7 @@ Xcode 27.1 is available on GitHub's [public-preview `xcode-27` runner](https://g
 
 The October dependency review enabled Swift 6 for all targets. The [October 19 Xcode 27.1/iOS 27.0 attempt](https://github.com/huddlz-hq/huddlz-ios/actions/runs/39250596328) reproduced twelve UI failures: Discover search and tab navigation, search filters and refresh, artwork rendering, and registration legal links. Its remaining group also reached the 30-minute job limit before completing. The [Xcode 27.1/iOS 26.5 fallback](https://github.com/huddlz-hq/huddlz-ios/actions/runs/39254783542) downloaded the supported runtime and compiled successfully, but XCUITest failed to initialize with “Timed out waiting for AX loaded notification.” That host failure does not establish a behavior pass or an app regression. Keep native behavior execution on the known-working Xcode 26.6/iOS 26.5 runner while requiring latest-compiler compatibility. No tests are skipped or weakened. Full Xcode 27.1 runtime adoption and the iOS 27 UI migration remain blocked; Xcode 27.2 beta is excluded from stable maintenance.
 
-Open Behavior tests on a PR to see its Xcode logs. The job saves an `ios-test-results` artifact for seven days with the build and test logs, test summary, and an `.xcresult` bundle you can open in Xcode.
+Open Behavior tests on a PR to see its Xcode logs. Each job saves an `ios-test-results-…` artifact for seven days with the build and test logs, test summary, and an `.xcresult` bundle you can open in Xcode.
 
 Joining integration tests cover opening the system browser, hybrid organizer access without an RSVP, revoked access on app return, sign-out, retry, and the absence of an online section for in-person events. Held HTTP responses verify sign-out discards a pending link; malformed URLs and responses for another huddl cannot produce an action. The client requests `visible_virtual_link` through an authenticated, cookie-free sparse detail request and accepts absolute HTTP(S) URLs. Separate read-only checks on September 9, 2026 verified the deployed schema and a null link in an anonymous response. No real private joining link was fetched or opened.
 
