@@ -93,13 +93,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Every UI journey runs on every pull request, split across four
-        # Simulators so no job runs more than about three minutes of tests.
-        # The first three parts each run only the classes they list. The last
-        # part skips all of those, so a new test class always runs there
+        # A pull request waits for the five core journeys on one Simulator.
+        # A push to main runs every UI journey across four Simulators. There
+        # the first three parts each run only the classes they list, and the
+        # last skips all of those, so a new test class always runs there
         # without an edit here; it also runs the store rules inside the
-        # Simulator. Timings are from November 9, 2026.
-        part: [maps-and-joining, rsvp-and-signup, account-and-groups, everything-else]
+        # Simulator.
+        part: ${{ fromJSON(github.event_name == 'pull_request' && '["core-journeys"]' || '["maps-and-joining","rsvp-and-signup","account-and-groups","everything-else"]') }}
     runs-on: macos-26
     timeout-minutes: 30
     env:
@@ -108,6 +108,14 @@ jobs:
       MAPS_AND_JOINING: DiscoveryVenueUITests JoiningUITests AgendaTabUITests TabsUITests DiscoveryPagingUITests
       RSVP_AND_SIGNUP: RSVPUITests RegistrationUITests SignupLocationUITests
       ACCOUNT_AND_GROUPS: SignupCityUITests AccountUITests GroupsTabUITests
+      # One journey each for launching, signing in, finding a huddl, RSVPing,
+      # and creating an account.
+      CORE_JOURNEYS: >-
+        TabsUITests/testLaunchingShowsDiscoverWithItsSearchFieldAndACollapsedTabPill
+        AccountUITests/testSigningInReturnsToBrowsingAndShowsTheAccount
+        DiscoveryUITests/testSearchingAndOpeningACardShowsCurrentDetailsWithoutSignIn
+        RSVPUITests/testRSVPAndCancellationUpdateYourAttendance
+        RegistrationUITests/testCreatingAnAccountRequiresAcceptanceAndReturnsToBrowsingWithASavedSession
     steps:
       - uses: actions/checkout@v7
         with:
@@ -204,6 +212,7 @@ jobs:
           set -o pipefail
           selection=()
           case "$PART" in
+            core-journeys) journeys="$CORE_JOURNEYS" ;;
             maps-and-joining) journeys="$MAPS_AND_JOINING" ;;
             rsvp-and-signup) journeys="$RSVP_AND_SIGNUP" ;;
             account-and-groups) journeys="$ACCOUNT_AND_GROUPS" ;;

@@ -125,12 +125,13 @@ Search-badge tests cover going, waitlisted, and unmarked cards, foreground and p
 
 ## Continuous integration
 
-GitHub Actions runs every test for pull requests into main and pushes to main, split so that nothing waits on a long job:
+GitHub Actions runs these jobs:
 
 - **Store rules** (1m20s on November 9, 2026) runs `swift test` on the Mac with no Simulator: the 90 Swift Testing rules.
-- **Behavior tests** runs every UI journey across four Simulator jobs side by side, each with about three minutes of tests. The first three jobs run the classes listed for them in the workflow; the last, `everything-else`, skips those classes, so a new test class runs there without an edit. It also runs the store rules again inside the Simulator.
+- **Behavior tests** on a pull request runs five core UI journeys on one Simulator: launching, signing in, searching and opening a huddl, RSVPing, and creating an account. They are listed as `CORE_JOURNEYS` in the workflow.
+- **Behavior tests** on a push to main runs every UI journey across four Simulator jobs side by side. The first three jobs run the classes listed for them in the workflow; the last, `everything-else`, skips those classes, so a new test class runs there without an edit. It also runs the store rules again inside the Simulator. A journey outside the core five can therefore break on main after a merge; fix or revert it there. Four jobs with every journey took 9 to 12 minutes on free hosted runners, which is why pull requests do not wait for them.
 
-Each Simulator job builds before it boots, because a booting Simulator slows the build sixfold. A hosted runner's Simulator has never booted, and its first boot took 1 to 8 minutes, so one run caches the booted Simulator's data and later runs on the same runner image restore it. Cloning Simulators for parallel workers took longer on hosted runners than the whole serial run. Each job must pass with no skips. The required “Native behavior tests” check passes only when the store rules, all four Simulator jobs, and the Xcode 27.1 compiler check succeed. You can also start it from Actions → iOS tests → Run workflow.
+Each Simulator job builds before it boots, because a booting Simulator slows the build sixfold. A hosted runner's Simulator has never booted, and its first boot took 1 to 8 minutes, so one run caches the booted Simulator's data and later runs on the same runner image restore it. Cloning Simulators for parallel workers took longer on hosted runners than the whole serial run. Each job must pass with no skips. The required “Native behavior tests” check passes only when the store rules, the Simulator jobs for that event, and the Xcode 27.1 compiler check succeed. You can also start it from Actions → iOS tests → Run workflow.
 
 Simulator builds use ad-hoc signing so tests can exercise the real Keychain. Disabling signing prevents Keychain access; no signing certificates or developer team are required for these simulator tests.
 
