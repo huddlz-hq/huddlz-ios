@@ -183,6 +183,26 @@ jobs:
           du -sh "$HOME/Library/Developer/CoreSimulator/Devices/$HUDDLZ_SIMULATOR_ID"
           xcrun simctl bootstatus "$HUDDLZ_SIMULATOR_ID" -b | tail -3
 
+      # Experiment: a Simulator that has just booted spends minutes of the
+      # runner's three cores on stock widgets and background services. Stop
+      # the ones no test needs and see what the launch and the tests gain.
+      - name: Quiet the Simulator
+        timeout-minutes: 3
+        run: |
+          busy() { ps -Ao %cpu,comm -r | grep CoreSimulator | head -12 | awk '{n=split($2,a,"/"); print $1, a[n]}'; }
+          echo "Busiest Simulator processes before:"; busy
+          noisy='news|health|amsengagement|shortcut|people|calendar|weather|stocks|tips|fitness|maps\.push|photoanalysis|mediaanalysis|suggest|spotlight|searchd|siri|assistant|parsec|proactive|duet|biome|chronod|widget|mobileasset|appstore|itunes|gamed|passd|wallet|homed|findmy|icloud|cloudd|bird|tipsd|podcast|music|books|remindd|familycircle|screentime|usagetracking|diagnosticd|osanalytics|triald|feedback'
+          for domain in system "user/$(id -u)" user/501; do
+            xcrun simctl spawn "$HUDDLZ_SIMULATOR_ID" launchctl print "$domain" 2> /dev/null |
+              grep -Eo 'com\.apple\.[A-Za-z0-9._-]+' | sort -u | grep -Ei "$noisy" > "$RUNNER_TEMP/noisy-services" || true
+            echo "$domain: $(wc -l < "$RUNNER_TEMP/noisy-services") services to stop"
+            while read -r label; do
+              xcrun simctl spawn "$HUDDLZ_SIMULATOR_ID" launchctl bootout "$domain/$label" 2> /dev/null || true
+            done < "$RUNNER_TEMP/noisy-services"
+          done
+          sleep 5
+          echo "Busiest Simulator processes after:"; busy
+
       # The first launch of any app on a Simulator that has just booted has
       # taken over a minute on hosted runners. XCUITest gives a launch 60
       # seconds, then xcodebuild hung on the next one until the job timed out.
