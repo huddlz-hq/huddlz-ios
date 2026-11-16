@@ -23,6 +23,7 @@ Use Zinsser’s four principles in all writing and responses, including document
 - When a rule lives in view `@State` and only a UI test can reach it, move that state into the store or a small model it owns, then test it there.
 - Stub only external service boundaries, such as HTTP, Apple Maps, and Core Location. Keep the app’s request building, decoding, logic, and views real. Use native simulation and real system permission prompts where available; inject service failures only when needed to exercise recovery reliably. Check results people can observe, not private methods or internal calls.
 - Keep tests independent of live data. Check the real backend separately, and report those checks separately from behavior tests.
+- Run `swift test` from the repository root as you work: it checks the store rules on the Mac in seconds, with no Simulator. It compiles every app file that does not import SwiftUI, so keep stores, clients, and models out of view files, and keep them free of iOS-only APIs.
 - Run focused tests as you work and the full suite before handoff. Passing launch checks does not mean a feature is tested.
 
 ## Agent skills

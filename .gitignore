@@ -10,3 +10,4 @@ xcuserdata/
 !.env.example
 *.p12
 *.mobileprovision
+.build/

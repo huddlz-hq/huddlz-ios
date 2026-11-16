@@ -5,6 +5,7 @@ on:
     branches: [main]
   push:
     branches: [main]
+  merge_group:
   workflow_dispatch:
 
 permissions:
@@ -15,6 +16,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # The Simulator jobs take about ten minutes each on a hosted runner, most of
+  # it before the first test starts. With a merge queue on main, a pull
+  # request skips them and hears back from the store rules and the compiler
+  # in about two minutes; the queue then runs every UI journey on the exact
+  # commit that would land, and main only keeps the Simulator cache warm.
+  # Without a merge queue, every pull request and push runs every journey.
+  plan:
+    name: Choose Simulator jobs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      parts: ${{ steps.choose.outputs.parts }}
+    steps:
+      - name: Choose by event and merge queue
+        id: choose
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          OWNER: ${{ github.repository_owner }}
+          NAME: ${{ github.event.repository.name }}
+        run: |
+          every_journey='["maps-and-joining","rsvp-and-signup","account-and-groups","everything-else"]'
+          queue="$(gh api graphql \
+            -f query='query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { mergeQueue(branch: "main") { id } } }' \
+            -f owner="$OWNER" -f name="$NAME" \
+            --jq '.data.repository.mergeQueue.id // empty' || true)"
+          if [ -z "$queue" ]; then
+            echo "No merge queue on main: every journey runs here."
+            parts="$every_journey"
+          else
+            case "$EVENT" in
+              pull_request) parts='[]' ;;
+              push) parts='["core-journeys"]' ;;
+              *) parts="$every_journey" ;;
+            esac
+          fi
+          echo "$EVENT runs $parts"
+          echo "parts=$parts" >> "$GITHUB_OUTPUT"
+
   latest-toolchain:
     name: Xcode 27.2 compiler compatibility
     runs-on: xcode-27
@@ -68,10 +108,12 @@ jobs:
             ${{ runner.temp }}/latest-release-build.log
           retention-days: 7
 
-  test:
-    name: Behavior tests
+  # The store rules compile and run on the Mac itself, so they need no
+  # Simulator and finish before the UI jobs have booted one.
+  store-rules:
+    name: Store rules
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 10
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     steps:
@@ -79,21 +121,53 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Start Simulator
-        timeout-minutes: 2
-        run: |
-          xcodebuild -version
-          simulator_id="$(xcrun simctl list devices available --json | jq -er '
-            .devices["com.apple.CoreSimulator.SimRuntime.iOS-26-5"]
-            | map(select(.name == "iPhone 17"))
-            | if length == 1 then .[0].udid else error("Expected one iPhone 17 simulator") end
-          ')"
-          xcrun simctl boot "$simulator_id"
-          echo "HUDDLZ_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
-
-      - name: Build tests while Simulator starts
+      - name: Run store rules
         run: |
           set -o pipefail
+          swift --version
+          swift test 2>&1 | tee "$RUNNER_TEMP/store-rules.log"
+          grep -Eq 'Test run with [1-9][0-9]* tests in [0-9]+ suites passed' "$RUNNER_TEMP/store-rules.log"
+
+  test:
+    name: Behavior tests (${{ matrix.part }})
+    needs: plan
+    if: needs.plan.outputs.parts != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        # The first three parts each run only the classes they list, and
+        # the last skips all of those, so a new test class always runs there
+        # without an edit here; it also runs the store rules inside the
+        # Simulator. core-journeys is the one job a push to main runs when a
+        # merge queue has already run the rest.
+        part: ${{ fromJSON(needs.plan.outputs.parts) }}
+    runs-on: macos-26
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      PART: ${{ matrix.part }}
+      MAPS_AND_JOINING: DiscoveryVenueUITests JoiningUITests AgendaTabUITests TabsUITests DiscoveryPagingUITests
+      RSVP_AND_SIGNUP: RSVPUITests RegistrationUITests SignupLocationUITests
+      ACCOUNT_AND_GROUPS: SignupCityUITests AccountUITests GroupsTabUITests
+      # One journey each for launching, signing in, finding a huddl, RSVPing,
+      # and creating an account.
+      CORE_JOURNEYS: >-
+        TabsUITests/testLaunchingShowsDiscoverWithItsSearchFieldAndACollapsedTabPill
+        AccountUITests/testSigningInReturnsToBrowsingAndShowsTheAccount
+        DiscoveryUITests/testSearchingAndOpeningACardShowsCurrentDetailsWithoutSignIn
+        RSVPUITests/testRSVPAndCancellationUpdateYourAttendance
+        RegistrationUITests/testCreatingAnAccountRequiresAcceptanceAndReturnsToBrowsingWithASavedSession
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Build before booting. A booting Simulator takes the runner's three
+      # cores, and building beside it took six minutes instead of one.
+      - name: Build tests
+        run: |
+          set -o pipefail
+          xcodebuild -version
           xcodebuild build-for-testing \
             -project Huddlz/Huddlz.xcodeproj \
             -scheme Huddlz \
@@ -103,21 +177,102 @@ jobs:
             CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
             2>&1 | tee "$RUNNER_TEMP/build.log"
 
-      - name: Wait for Simulator readiness
-        timeout-minutes: 5
-        run: xcrun simctl bootstatus "$HUDDLZ_SIMULATOR_ID" -b
+      # A hosted runner's Simulator has never booted. Its first boot builds
+      # 1.3 GB of device data and took 1 to 8 minutes of the runner's three
+      # cores, and the first tests then ran beside the leftover work. So one
+      # run boots the Simulator, shuts it down, and caches its data; later
+      # runs on the same runner image restore it and boot in seconds.
+      - name: Find Simulator
+        id: simulator
+        run: |
+          sudo mdutil -a -i off > /dev/null 2>&1 || true
+          simulator_id="$(xcrun simctl list devices available --json | jq -er '
+            .devices["com.apple.CoreSimulator.SimRuntime.iOS-26-5"]
+            | map(select(.name == "iPhone 17"))
+            | if length == 1 then .[0].udid else error("Expected one iPhone 17 simulator") end
+          ')"
+          echo "HUDDLZ_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
+          echo "data=$HOME/Library/Developer/CoreSimulator/Devices/$simulator_id" >> "$GITHUB_OUTPUT"
+          echo "key=booted-simulator-v1-$ImageOS-$ImageVersion-$simulator_id" >> "$GITHUB_OUTPUT"
 
-      # One booted Simulator, tests in sequence. Cloning Simulators for
+      - name: Restore booted Simulator data
+        id: booted
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.simulator.outputs.data }}
+          key: ${{ steps.simulator.outputs.key }}
+
+      - name: Boot Simulator for the first time
+        if: steps.booted.outputs.cache-hit != 'true'
+        timeout-minutes: 15
+        run: |
+          xcrun simctl bootstatus "$HUDDLZ_SIMULATOR_ID" -b
+          xcrun simctl shutdown "$HUDDLZ_SIMULATOR_ID"
+
+      - name: Save booted Simulator data
+        if: steps.booted.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.simulator.outputs.data }}
+          key: ${{ steps.simulator.outputs.key }}
+
+      - name: Start Simulator
+        timeout-minutes: 15
+        run: |
+          # CoreSimulator read the device before its data was restored.
+          killall -9 com.apple.CoreSimulator.CoreSimulatorService 2> /dev/null || true
+          du -sh "$HOME/Library/Developer/CoreSimulator/Devices/$HUDDLZ_SIMULATOR_ID"
+          xcrun simctl bootstatus "$HUDDLZ_SIMULATOR_ID" -b | tail -3
+
+      # The first launch of any app on a Simulator that has just booted has
+      # taken over a minute on hosted runners. XCUITest gives a launch 60
+      # seconds, then xcodebuild hung on the next one until the job timed out.
+      # So the app launches once here, against an empty response script that
+      # keeps it off the network, before the tests start their clock. The
+      # permission service is as slow to wake: a test's own reset of location
+      # access timed out at 30 seconds, so the first reset happens here too.
+      - name: Launch the app once
+        timeout-minutes: 6
+        env:
+          SIMCTL_CHILD_HUDDLZ_UI_HTTP_SCRIPT: "[]"
+          SIMCTL_CHILD_HUDDLZ_UI_SESSION_ID: first-launch
+        run: |
+          app="$RUNNER_TEMP/HuddlzDerivedData/Build/Products/Debug-iphonesimulator/Huddlz.app"
+          time xcrun simctl install "$HUDDLZ_SIMULATOR_ID" "$app"
+          time xcrun simctl launch "$HUDDLZ_SIMULATOR_ID" com.huddlz.Huddlz
+          time xcrun simctl privacy "$HUDDLZ_SIMULATOR_ID" reset location com.huddlz.Huddlz
+          sleep 10
+          xcrun simctl terminate "$HUDDLZ_SIMULATOR_ID" com.huddlz.Huddlz
+
+      # One booted Simulator per job, tests in sequence. Cloning Simulators for
       # parallel workers took over 12 minutes on hosted runners before the
-      # first test ran, longer than the whole serial suite.
+      # first test ran, so the suite is split across jobs instead.
       - name: Run behavior tests
+        timeout-minutes: 15
         run: |
           set -o pipefail
+          selection=()
+          case "$PART" in
+            core-journeys) journeys="$CORE_JOURNEYS" ;;
+            maps-and-joining) journeys="$MAPS_AND_JOINING" ;;
+            rsvp-and-signup) journeys="$RSVP_AND_SIGNUP" ;;
+            account-and-groups) journeys="$ACCOUNT_AND_GROUPS" ;;
+            *) journeys="" ;;
+          esac
+          if [ -n "$journeys" ]; then
+            for journey in $journeys; do selection+=("-only-testing:HuddlzUITests/$journey"); done
+          else
+            for journey in $MAPS_AND_JOINING $RSVP_AND_SIGNUP $ACCOUNT_AND_GROUPS; do
+              selection+=("-skip-testing:HuddlzUITests/$journey")
+            done
+          fi
+          printf '%s\n' "${selection[@]}"
           xcodebuild test-without-building \
             -project Huddlz/Huddlz.xcodeproj \
             -scheme Huddlz \
             -destination "platform=iOS Simulator,id=$HUDDLZ_SIMULATOR_ID" \
             -parallel-testing-enabled NO \
+            "${selection[@]}" \
             -derivedDataPath "$RUNNER_TEMP/HuddlzDerivedData" \
             -resultBundlePath "$RUNNER_TEMP/HuddlzTests.xcresult" \
             CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
@@ -141,7 +296,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: ios-test-results
+          name: ios-test-results-${{ matrix.part }}
           path: |
             ${{ runner.temp }}/HuddlzTests.xcresult
             ${{ runner.temp }}/build.log
@@ -152,13 +307,24 @@ jobs:
   required-tests:
     name: Native behavior tests
     runs-on: ubuntu-latest
-    needs: [test, latest-toolchain]
+    needs: [plan, store-rules, test, latest-toolchain]
     if: always()
     steps:
       - name: Require the behavior tests and compiler check to pass
         env:
+          PARTS: ${{ needs.plan.outputs.parts }}
+          PLAN_RESULT: ${{ needs.plan.result }}
+          STORE_RULES_RESULT: ${{ needs.store-rules.result }}
           TEST_RESULT: ${{ needs.test.result }}
           COMPILER_RESULT: ${{ needs.latest-toolchain.result }}
         run: |
-          test "$TEST_RESULT" = success
+          test "$PLAN_RESULT" = success
+          test "$STORE_RULES_RESULT" = success
           test "$COMPILER_RESULT" = success
+          # The Simulator jobs may be skipped only when the plan left them to
+          # the merge queue.
+          if [ "$PARTS" = '[]' ]; then
+            test "$TEST_RESULT" = skipped
+          else
+            test "$TEST_RESULT" = success
+          fi
