@@ -10,7 +10,7 @@ struct DiscoveryView: View {
     @State private var preferences = DiscoveryPreferences()
     @Environment(AccountStore.self) private var account
     @State private var isChoosingLocation = false
-    @State private var visibleHuddlIDs: Set<Huddl.ID> = []
+    @State private var visibility = DiscoveryScrollVisibility()
 
     var body: some View {
         NavigationStack {
@@ -58,7 +58,11 @@ struct DiscoveryView: View {
             }
         }
         .background { AmbientBackground() }
-        .background { SearchBadgeLoader(store: badges, huddlIDs: visibleHuddlIDs, refresh: badgeRefresh) }
+        .background { SearchBadgeLoader(store: badges, visibility: visibility, refresh: badgeRefresh) }
+        .background { DiscoveryPaginationLoader(store: store, visibility: visibility) }
+        .onChange(of: store.isLoading) { _, isLoading in
+            if isLoading { visibility.clear() }
+        }
         .toolbar(horizontalSizeClass == .compact ? .hidden : .automatic, for: .navigationBar)
         // The first search waits for the saved session check, so it runs once, as the right person.
         .task(id: SearchRequest(query: preferences.query, userID: account.user?.id, isReady: account.hasCheckedSession)) {
@@ -216,17 +220,13 @@ struct DiscoveryView: View {
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("huddl-\(huddl.id)")
                         .onScrollVisibilityChange(threshold: 0.1) { visible in
-                            if visible {
-                                visibleHuddlIDs.insert(huddl.id)
-                            } else {
-                                visibleHuddlIDs.remove(huddl.id)
-                            }
+                            visibility.setVisible(visible, for: huddl.id)
                         }
                 }
                 if let message = store.moreError {
                     Text(message).foregroundStyle(.secondary)
                 }
-                DiscoveryPaginationFooter(store: store, visibleHuddlIDs: visibleHuddlIDs)
+                DiscoveryPaginationFooter(store: store)
             }
         }
     }
@@ -238,45 +238,54 @@ private struct SearchRequest: Equatable {
     let isReady: Bool
 }
 
-// Keep pagination observation separate from the view that owns native refresh.
-private struct DiscoveryPaginationFooter: View {
+// Keep pagination triggers outside the lazy scroll stack so scroll visibility updates do not rebuild Discover.
+private struct DiscoveryPaginationLoader: View {
     let store: DiscoveryStore
-    let visibleHuddlIDs: Set<Huddl.ID>
+    let visibility: DiscoveryScrollVisibility
 
     private var automaticNextPage: URL? {
         guard !store.isRefreshing,
               store.moreError == nil,
               let lastID = store.huddlz.last?.id,
-              visibleHuddlIDs.contains(lastID) else { return nil }
+              visibility.huddlIDs.contains(lastID) else { return nil }
         return store.nextPage
     }
 
     var body: some View {
-        Group {
-            if store.nextPage != nil {
-                Group {
-                    if store.isLoadingMore {
-                        ProgressView("Loading more…")
-                            .accessibilityIdentifier("pagination-loading")
-                    } else if store.moreError != nil {
-                        Button("Try loading more again") {
-                            Task { await store.loadMore() }
-                        }
-                        .buttonStyle(.glass)
-                        .disabled(store.isRefreshing)
-                    } else {
-                        Color.clear.accessibilityHidden(true)
-                    }
+        Color.clear
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .onChange(of: automaticNextPage, initial: true) { _, next in
+                guard let next else { return }
+                Task {
+                    guard automaticNextPage == next else { return }
+                    await store.loadMore()
                 }
-                .frame(maxWidth: .infinity, minHeight: 48)
             }
-        }
-        .onChange(of: automaticNextPage, initial: true) { _, next in
-            guard let next else { return }
-            Task {
-                guard automaticNextPage == next else { return }
-                await store.loadMore()
+    }
+}
+
+// Keep pagination observation separate from the view that owns native refresh.
+private struct DiscoveryPaginationFooter: View {
+    let store: DiscoveryStore
+
+    var body: some View {
+        if store.nextPage != nil {
+            ZStack {
+                if store.isLoadingMore {
+                    ProgressView("Loading more…")
+                        .accessibilityIdentifier("pagination-loading")
+                } else if store.moreError != nil {
+                    Button("Try loading more again") {
+                        Task { await store.loadMore() }
+                    }
+                    .buttonStyle(.glass)
+                    .disabled(store.isRefreshing)
+                } else {
+                    Color.clear.accessibilityHidden(true)
+                }
             }
+            .frame(maxWidth: .infinity, minHeight: 56)
         }
     }
 }
