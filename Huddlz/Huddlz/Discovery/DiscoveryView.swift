@@ -26,10 +26,16 @@ struct DiscoveryView: View {
         }
     }
 
+    private var usesNavigationBarSearch: Bool {
+        if #available(iOS 27, *) { true } else { false }
+    }
+
     private var discoveryContent: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
-                BrandHeader { isShowingAccount = true }
+                if !usesNavigationBarSearch {
+                    BrandHeader { isShowingAccount = true }
+                }
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Find your people.")
                         .font(.system(.largeTitle, design: .rounded, weight: .bold))
@@ -40,13 +46,15 @@ struct DiscoveryView: View {
                 if !preferences.query.text.isEmpty { searchSummary }
                 results
             }
-            .padding(20)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 20)
+            .padding(.top, usesNavigationBarSearch ? 8 : 20)
             .frame(maxWidth: 640)
             .frame(maxWidth: .infinity)
         }
-        // With the navigation bar hidden, nothing separates the status bar from scrolled cards; fade them out under it.
+        // With the navigation bar hidden on iOS 26, fade scrolled cards under the status bar.
         .overlay(alignment: .top) {
-            if horizontalSizeClass == .compact {
+            if horizontalSizeClass == .compact, !usesNavigationBarSearch {
                 GeometryReader { proxy in
                     LinearGradient(colors: [HuddlStyle.background, HuddlStyle.background.opacity(0)],
                                    startPoint: .top, endPoint: .bottom)
@@ -63,7 +71,10 @@ struct DiscoveryView: View {
         .onChange(of: store.isLoading) { _, isLoading in
             if isLoading { visibility.clear() }
         }
-        .toolbar(horizontalSizeClass == .compact ? .hidden : .automatic, for: .navigationBar)
+        .modifier(DiscoverySearchChrome(searchText: $searchText,
+                                        usesNavigationBarSearch: usesNavigationBarSearch,
+                                        horizontalSizeClass: horizontalSizeClass,
+                                        openAccount: { isShowingAccount = true }))
         // The first search waits for the saved session check, so it runs once, as the right person.
         .task(id: SearchRequest(query: preferences.query, userID: account.user?.id, isReady: account.hasCheckedSession)) {
             guard account.hasCheckedSession else { return }
@@ -77,9 +88,6 @@ struct DiscoveryView: View {
                 badgeRefresh = UUID()
             }
         }
-        // The search-role tab shows this field in the tab bar and expands it when tapped.
-        .searchable(text: $searchText, prompt: "Search huddlz")
-        .searchToolbarBehavior(.minimize)
         .onSubmit(of: .search) { preferences.query.text = searchText }
         .refreshable { await refresh() }
         .navigationDestination(for: Huddl.ID.self) { HuddlDetailView(id: $0) }
@@ -228,6 +236,40 @@ struct DiscoveryView: View {
                 }
                 DiscoveryPaginationFooter(store: store)
             }
+        }
+    }
+}
+
+private struct DiscoverySearchChrome: ViewModifier {
+    @Binding var searchText: String
+    let usesNavigationBarSearch: Bool
+    let horizontalSizeClass: UserInterfaceSizeClass?
+    let openAccount: () -> Void
+
+    func body(content: Content) -> some View {
+        if usesNavigationBarSearch {
+            // iOS 27 keeps the Discover tab inside the tab bar pill and places `.searchable` in the navigation bar.
+            content
+                .navigationTitle("")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar(.visible, for: .navigationBar)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        BrandWordmark()
+                    }
+                    .sharedBackgroundVisibility(.hidden)
+                    ToolbarItem(placement: .topBarTrailing) {
+                        AccountButton(openAccount: openAccount)
+                    }
+                    .sharedBackgroundVisibility(.hidden)
+                }
+                .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search huddlz")
+        } else {
+            // iOS 26 puts the search-role tab's field in the bottom tab bar and expands it when tapped.
+            content
+                .toolbar(horizontalSizeClass == .compact ? .hidden : .automatic, for: .navigationBar)
+                .searchable(text: $searchText, prompt: "Search huddlz")
+                .searchToolbarBehavior(.minimize)
         }
     }
 }

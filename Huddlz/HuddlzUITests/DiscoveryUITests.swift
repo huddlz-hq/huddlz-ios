@@ -93,9 +93,27 @@ final class DiscoveryPagingUITests: DiscoveryUITestCase {
                           ["status": 200, "body": page([hike]), "delaySeconds": 8]]
         ]])
         XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
-        let wordmark = app.staticTexts["huddlz"].frame
-        // This strip above the resting wordmark row is blank unless the native spinner appears.
-        let region = CGRect(x: app.frame.midX - 22, y: wordmark.minY - 22, width: 44, height: 22)
+        let region: CGRect
+        let clearedTitleRegion: CGRect?
+        let dragStartY: CGFloat
+        let dragEndY: CGFloat
+        if #available(iOS 27, *) {
+            // On iOS 27 the wordmark and search field live in the navigation bar. Pull from the heading below
+            // the search field (above the horizontal filter bar). During refresh the heading shifts down,
+            // leaving its left side blank while the centered native spinner appears in the middle.
+            let heading = app.staticTexts["Find your people."].frame
+            region = CGRect(x: app.frame.midX - 22, y: heading.minY, width: 44, height: heading.height)
+            clearedTitleRegion = CGRect(x: heading.minX, y: heading.minY, width: 60, height: heading.height)
+            dragStartY = 0.23
+            dragEndY = 0.85
+        } else {
+            let wordmark = app.staticTexts["huddlz"].frame
+            // This strip above the resting wordmark row is blank unless the native spinner appears.
+            region = CGRect(x: app.frame.midX - 22, y: wordmark.minY - 22, width: 44, height: 22)
+            clearedTitleRegion = nil
+            dragStartY = 0.12
+            dragEndY = 0.85
+        }
         let captured = Mutex<Data?>(nil)
         let captureFinished = expectation(description: "Capture native refresh feedback")
         // The drag waits for native animations to finish. Capture the screen during the request.
@@ -105,8 +123,8 @@ final class DiscoveryPagingUITests: DiscoveryUITestCase {
             captureFinished.fulfill()
         }
         let scroll = app.scrollViews.firstMatch
-        scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12))
-            .press(forDuration: 0.1, thenDragTo: scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85)))
+        scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: dragStartY))
+            .press(forDuration: 0.1, thenDragTo: scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: dragEndY)))
         wait(for: [captureFinished], timeout: 12)
         let data = captured.withLock { $0 }!
         let screenshot = UIImage(data: data)!
@@ -114,21 +132,26 @@ final class DiscoveryPagingUITests: DiscoveryUITestCase {
         attachment.lifetime = .keepAlways
         add(attachment)
         let scale = CGFloat(screenshot.cgImage!.width) / app.frame.width
-        let crop = screenshot.cgImage!.cropping(to: region.applying(CGAffineTransform(scaleX: scale, y: scale)))!
-        var pixels = [UInt8](repeating: 0, count: crop.width * crop.height * 4)
-        pixels.withUnsafeMutableBytes { bytes in
-            let context = CGContext(data: bytes.baseAddress, width: crop.width, height: crop.height,
-                                    bitsPerComponent: 8, bytesPerRow: crop.width * 4,
-                                    space: CGColorSpaceCreateDeviceRGB(),
-                                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-            context.draw(crop, in: CGRect(x: 0, y: 0, width: crop.width, height: crop.height))
+        func contrast(in rect: CGRect) -> Int {
+            let crop = screenshot.cgImage!.cropping(to: rect.applying(CGAffineTransform(scaleX: scale, y: scale)))!
+            var pixels = [UInt8](repeating: 0, count: crop.width * crop.height * 4)
+            pixels.withUnsafeMutableBytes { bytes in
+                let context = CGContext(data: bytes.baseAddress, width: crop.width, height: crop.height,
+                                        bitsPerComponent: 8, bytesPerRow: crop.width * 4,
+                                        space: CGColorSpaceCreateDeviceRGB(),
+                                        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+                context.draw(crop, in: CGRect(x: 0, y: 0, width: crop.width, height: crop.height))
+            }
+            var brightness: [Int] = []
+            for index in stride(from: 0, to: pixels.count, by: 4) {
+                brightness.append(Int(pixels[index]) + Int(pixels[index + 1]) + Int(pixels[index + 2]))
+            }
+            return brightness.max()! - brightness.min()!
         }
-        var brightness: [Int] = []
-        for index in stride(from: 0, to: pixels.count, by: 4) {
-            let value = Int(pixels[index]) + Int(pixels[index + 1]) + Int(pixels[index + 2])
-            brightness.append(value)
+        if let clearedTitleRegion {
+            XCTAssertLessThan(contrast(in: clearedTitleRegion), 30, "The heading must shift down while refreshing")
         }
-        XCTAssertGreaterThan(brightness.max()! - brightness.min()!, 30, "The native spinner must be visible above the heading")
+        XCTAssertGreaterThan(contrast(in: region), 30, "The native spinner must be visible above the heading")
         XCTAssertTrue(app.buttons["huddl-hike"].waitForExistence(timeout: 12))
         XCTAssertTrue(app.searchFields.firstMatch.exists)
     }

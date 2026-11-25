@@ -185,14 +185,8 @@ struct AccountView: View {
 
     private func identity(_ user: AccountUser) -> some View {
         let name = user.displayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let initials = name.split(whereSeparator: \.isWhitespace).prefix(2).compactMap(\.first).map(String.init).joined()
         return HStack(spacing: 16) {
-            Text(initials.isEmpty ? String(user.email.prefix(1)).uppercased() : initials.uppercased())
-                .font(.system(.title2, design: .rounded, weight: .heavy))
-                .foregroundStyle(HuddlStyle.accent)
-                .frame(width: 64, height: 64)
-                .background(HuddlStyle.accent.opacity(0.12), in: .circle)
-                .accessibilityHidden(true)
+            AccountAvatar(user: user, size: 64)
             VStack(alignment: .leading, spacing: 4) {
                 if !name.isEmpty { Text(name).font(.title3.bold()) }
                 Text(user.email).foregroundStyle(.secondary)

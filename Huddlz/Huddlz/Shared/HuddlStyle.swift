@@ -134,49 +134,123 @@ struct EventTypePill: View {
     }
 }
 
+/// The huddlz square emblem and wordmark shared by tab headers.
+struct BrandWordmark: View {
+    var body: some View {
+        HStack(spacing: 10) {
+            Text("h")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(Color(uiColor: .systemBackground))
+                .frame(width: 28, height: 28)
+                .background(HuddlStyle.accent, in: .rect(cornerRadius: 8))
+                .accessibilityHidden(true)
+            Text("huddlz")
+                .font(.system(size: 16, weight: .heavy))
+                .tracking(-0.5)
+        }
+        .fixedSize()
+    }
+}
+
+/// The circular glass Account button, showing the signed-in member's photo when available.
+struct AccountButton: View {
+    let openAccount: () -> Void
+    @Environment(AccountStore.self) private var account
+
+    var body: some View {
+        Button(action: openAccount) {
+            if let avatarURL = account.user?.avatarURL {
+                AsyncImage(url: avatarURL) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    Image(systemName: "person.crop.circle").font(.title3)
+                }
+                .frame(width: 28, height: 28)
+                .clipShape(.circle)
+            } else {
+                Image(systemName: "person.crop.circle")
+                    .font(.title3)
+                    .frame(width: 28, height: 28)
+            }
+        }
+        .buttonStyle(.glass)
+        .buttonBorderShape(.circle)
+        .accessibilityLabel("Account")
+    }
+}
+
+/// The signed-in member's profile photo, falling back to their initials circle when no photo is set.
+struct AccountAvatar: View {
+    let user: AccountUser
+    var size: CGFloat = 64
+
+    var body: some View {
+        let name = user.displayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let initials = name.split(whereSeparator: \.isWhitespace).prefix(2).compactMap(\.first).map(String.init).joined()
+        let fallback = Text(initials.isEmpty ? String(user.email.prefix(1)).uppercased() : initials.uppercased())
+            .font(.system(size: size * 0.34, weight: .heavy, design: .rounded))
+            .foregroundStyle(HuddlStyle.accent)
+            .frame(width: size, height: size)
+            .background(HuddlStyle.accent.opacity(0.12), in: .circle)
+
+        Group {
+            if let avatarURL = user.avatarURL {
+                AsyncImage(url: avatarURL) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    fallback
+                }
+                .frame(width: size, height: size)
+                .clipShape(.circle)
+            } else {
+                fallback
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
 /// The wordmark and glass Account button that open each tab, as on the web app's header.
 struct BrandHeader: View {
     let openAccount: () -> Void
 
     var body: some View {
         HStack {
-            HStack(spacing: 10) {
-                Text("h")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(Color(uiColor: .systemBackground))
-                    .frame(width: 28, height: 28)
-                    .background(HuddlStyle.accent, in: .rect(cornerRadius: 8))
-                    .accessibilityHidden(true)
-                Text("huddlz")
-                    .font(.system(size: 16, weight: .heavy))
-                    .tracking(-0.5)
-            }
+            BrandWordmark()
             Spacer(minLength: 8)
-            Button(action: openAccount) {
-                Image(systemName: "person.crop.circle")
-                    .font(.title3)
-                    .frame(width: 28, height: 28)
-            }
-            .buttonStyle(.glass)
-            .buttonBorderShape(.circle)
-            .accessibilityLabel("Account")
+            AccountButton(openAccount: openAccount)
         }
     }
 }
 
-/// A square tile with the group's initial, standing in for group artwork. Each name keeps one tint from
-/// the brand palette, so neighboring groups are easy to tell apart.
+/// A square tile showing the group's image, or its initial in a stable brand tint when no image is set.
 struct GroupTile: View {
     let name: String
+    var imageURL: URL? = nil
     var size: CGFloat = 48
 
     var body: some View {
-        Text(initial)
+        let radius = size * 0.29
+        let monogram = Text(initial)
             .font(.system(size: size * 0.42, weight: .heavy, design: .rounded))
             .foregroundStyle(tint)
             .frame(width: size, height: size)
-            .background(tint.opacity(0.14), in: .rect(cornerRadius: size * 0.29))
-            .accessibilityHidden(true)
+            .background(tint.opacity(0.14), in: .rect(cornerRadius: radius))
+
+        Group {
+            if let imageURL {
+                AsyncImage(url: imageURL) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    monogram
+                }
+                .frame(width: size, height: size)
+                .clipShape(.rect(cornerRadius: radius))
+            } else {
+                monogram
+            }
+        }
+        .accessibilityHidden(true)
     }
 
     private var tint: Color {

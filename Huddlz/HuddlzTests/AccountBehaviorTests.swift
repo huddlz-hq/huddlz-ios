@@ -259,4 +259,32 @@ struct AccountBehaviorTests {
         #expect(!account.isBusy)
         #expect(try await tokens.load() == "fixture-token")
     }
+
+    @Test("Signed-in and restored sessions carry a safe avatar URL when present, and ignore unsafe links", arguments: [
+        ("\"https://huddlz.com/uploads/profile_pictures/1/avatar_thumb.jpg\"", "https://huddlz.com/uploads/profile_pictures/1/avatar_thumb.jpg"),
+        ("null", nil),
+        ("\"javascript:alert(1)\"", nil),
+        ("\"file:///etc/passwd\"", nil),
+        ("\"   \"", nil)
+    ] as [(String, String?)])
+    func accountAvatarURLValidation(rawValue: String, expected: String?) async throws {
+        let tokens = SessionTokenStore(service: "com.huddlz.tests.\(UUID())")
+        defer { Task { try? await tokens.clear() } }
+        let userJSON = #"{"id":"neighbor","email":"neighbor@example.com","display_name":"Our Neighbor","avatar_url":\#(rawValue)}"#
+        let client = AccountClient { request in
+            if request.url?.path == "/api/auth/sign_in" {
+                return HTTPFixture.response(request, body: #"{"token":"fixture-token","user":\#(userJSON)}"#)
+            }
+            return HTTPFixture.response(request, body: #"{"user":\#(userJSON)}"#)
+        }
+        let account = AccountStore(client: client, tokens: tokens)
+        await account.signIn(email: "neighbor@example.com", password: "sample-password")
+        let signedIn = try #require(account.user)
+        #expect(signedIn.avatarURL?.absoluteString == expected)
+
+        let restored = AccountStore(client: client, tokens: tokens)
+        await restored.restore()
+        let restoredUser = try #require(restored.user)
+        #expect(restoredUser.avatarURL?.absoluteString == expected)
+    }
 }

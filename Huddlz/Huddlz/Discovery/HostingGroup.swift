@@ -8,5 +8,8 @@ struct HostingGroup: Decodable, Identifiable {
         let name: String
         let description: String?
         let location: String?
+        let imageUrl: String?
     }
+
+    var imageURL: URL? { URL.huddlzMedia(attributes.imageUrl) }
 }

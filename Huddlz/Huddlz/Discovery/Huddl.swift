@@ -35,11 +35,7 @@ struct Huddl: Identifiable, Decodable, Hashable, Sendable {
     var title: String { attributes.title }
 
     var imageURL: URL? {
-        guard let text = (attributes.imageUrl ?? attributes.thumbnailUrl)?.trimmingCharacters(in: .whitespacesAndNewlines),
-              let url = URL(string: text),
-              ["https", "http"].contains(url.scheme?.lowercased() ?? ""),
-              let host = url.host, !host.isEmpty else { return nil }
-        return url
+        URL.huddlzMedia(attributes.imageUrl ?? attributes.thumbnailUrl)
     }
 
     var location: String {
@@ -141,6 +137,17 @@ enum EventType: String, Decodable, CaseIterable, Identifiable, Sendable {
         case .virtual: "video.fill"
         case .hybrid: "globe"
         }
+    }
+}
+
+extension URL {
+    /// Accepts only http(s) URLs with a host, matching the web media links Huddlz serves.
+    static func huddlzMedia(_ raw: String?) -> URL? {
+        guard let text = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
+              let url = URL(string: text),
+              ["https", "http"].contains(url.scheme?.lowercased() ?? ""),
+              let host = url.host, !host.isEmpty else { return nil }
+        return url
     }
 }
 
