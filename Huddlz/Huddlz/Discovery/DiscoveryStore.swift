@@ -55,19 +55,12 @@ final class DiscoveryStore {
         }
     }
 
-    func refresh(_ query: DiscoveryQuery, token: String? = nil, superseding: Bool = false) async {
+    func refresh(_ query: DiscoveryQuery, token: String? = nil) async {
         if loadedToken != token {
             await search(query, token: token)
             return
         }
-        if superseding {
-            if loadedQuery != query || isLoading {
-                await search(query, token: token)
-                return
-            }
-        } else {
-            guard !isLoading, !isRefreshing else { return }
-        }
+        guard !isLoading, !isRefreshing else { return }
         let request = UUID()
         revision = request
         isRefreshing = true

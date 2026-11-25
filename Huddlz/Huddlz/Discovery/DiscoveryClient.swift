@@ -6,7 +6,7 @@ struct DiscoveryPage {
 }
 
 struct DiscoveryClient {
-    static let sharedSession: URLSession = {
+    private static let sharedSession: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.httpShouldSetCookies = false
         configuration.timeoutIntervalForRequest = 30

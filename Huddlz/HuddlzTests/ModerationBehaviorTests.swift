@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import Testing
 @testable import Huddlz
@@ -289,22 +290,34 @@ struct ModerationBehaviorTests {
         #expect(checks == 1)
     }
 
-    @Test("Owners never flash report or block options while ownership is still loading")
+    @Test("Owners never flash report or block options while ownership is loading or re-checking")
     func menuWaitsForOwnershipCheck() async throws {
-        let pending = PendingHTTPResponse()
+        let firstPending = PendingHTTPResponse()
+        let secondPending = PendingHTTPResponse()
+        var checks = 0
         let (account, tokens) = await signedIn { request in
             guard request.url?.path == "/api/json/huddlz/coffee" else { return nil }
-            return try await pending.fetch(request)
+            checks += 1
+            return try await (checks == 1 ? firstPending : secondPending).fetch(request)
         }
         defer { Task { try? await tokens.clear() } }
         let store = ModerationStore(subject: .huddl("coffee"))
         #expect(store.showsMenu(for: nil))
         #expect(!store.showsMenu(for: account.user))
         let check = Task { await store.checkOwnership(account: account) }
-        await pending.waitUntilRequested()
+        await firstPending.waitUntilRequested()
         #expect(!store.showsMenu(for: account.user))
-        pending.finish(body: #"{"data":{"id":"coffee","attributes":{"organized_by_me":true}}}"#)
+        firstPending.finish(body: #"{"data":{"id":"coffee","attributes":{"organized_by_me":true}}}"#)
         await check.value
+        #expect(store.isOwn)
+        #expect(!store.showsMenu(for: account.user))
+
+        // A repeat check for the same confirmed owner keeps the menu hidden until the fresh answer lands.
+        let recheck = Task { await store.checkOwnership(account: account) }
+        await secondPending.waitUntilRequested()
+        #expect(!store.showsMenu(for: account.user))
+        secondPending.finish(body: #"{"data":{"id":"coffee","attributes":{"organized_by_me":true}}}"#)
+        await recheck.value
         #expect(store.isOwn)
         #expect(!store.showsMenu(for: account.user))
     }
@@ -491,14 +504,14 @@ struct ModerationBehaviorTests {
         await moderation.block(account: account)
         #expect(moderation.notice == .blocked)
         #expect(account.blockRevision != listsBefore)
-        await discovery.refresh(query, token: await account.browsingToken())
+        await discovery.search(query, token: await account.browsingToken())
         #expect(discovery.huddlz.map(\.id) == ["hike"])
-        #expect(discovery.refreshError == nil)
+        #expect(discovery.errorMessage == nil)
 
         let blocked = BlockedPeopleStore()
         await blocked.load(account: account)
         await blocked.unblock(try #require(blocked.people.first), account: account)
-        await discovery.refresh(query, token: await account.browsingToken())
+        await discovery.search(query, token: await account.browsingToken())
         #expect(discovery.huddlz.map(\.id) == ["coffee", "hike"])
     }
 
@@ -566,29 +579,42 @@ struct ModerationBehaviorTests {
         #expect(authorizations == ["Bearer fixture-token", nil, nil])
     }
 
-    @Test("A block supersedes an in-flight refresh or search so the blocked organizer’s huddlz cannot stay")
-    func blockSupersedesInFlightRefresh() async {
+    @Test("A block clears pre-block cards and cursor even on failure, and supersedes an in-flight refresh")
+    func blockClearsCardsAndSupersedesInFlightRefresh() async {
         let pendingRefresh = PendingHTTPResponse()
+        let next = "https://huddlz.com/api/json/huddlz?page%5Bafter%5D=coffee"
         var isBlocked = false
+        var failNext = false
         var calls = 0
         let discovery = DiscoveryStore(client: DiscoveryClient { request in
             calls += 1
             if calls == 2 { return try await pendingRefresh.fetch(request) }
+            if failNext { return HTTPFixture.response(request, body: "{}", status: 503) }
             let events = isBlocked ? [HTTPFixture.hike] : [HTTPFixture.coffee, HTTPFixture.hike]
-            return HTTPFixture.response(request, body: HTTPFixture.page(events))
+            return HTTPFixture.response(request, body: HTTPFixture.page(events, next: isBlocked ? nil : next))
         })
         let query = DiscoveryQuery()
         await discovery.load(query, token: "fixture-token")
         #expect(discovery.huddlz.map(\.id) == ["coffee", "hike"])
+        #expect(discovery.nextPage?.absoluteString == next)
 
         let staleRefresh = Task { await discovery.refresh(query, token: "fixture-token") }
         await pendingRefresh.waitUntilRequested()
         isBlocked = true
-        await discovery.refresh(query, token: "fixture-token", superseding: true)
+        failNext = true
+        await discovery.search(query, token: "fixture-token")
         pendingRefresh.finish(body: HTTPFixture.page([HTTPFixture.coffee, HTTPFixture.hike]))
         await staleRefresh.value
-        #expect(discovery.huddlz.map(\.id) == ["hike"])
+        // Even if the post-block reload fails, pre-block cards and pagination cursor stay gone.
+        #expect(discovery.huddlz.isEmpty)
+        #expect(discovery.nextPage == nil)
+        #expect(discovery.errorMessage != nil)
         #expect(!discovery.isRefreshing)
+
+        failNext = false
+        await discovery.search(query, token: "fixture-token")
+        #expect(discovery.huddlz.map(\.id) == ["hike"])
+        #expect(discovery.errorMessage == nil)
     }
 
     @Test("An expired session still searches, as a visitor")
@@ -763,20 +789,44 @@ struct ModerationBehaviorTests {
         #expect(authorizations == ["Bearer member-token", nil])
     }
 
+    @Test("A cached group load does not interrupt an in-flight next batch")
+    func cachedGroupLoadPreservesInFlightLoadMore() async {
+        let pendingMore = PendingHTTPResponse()
+        let next = "https://huddlz.com/api/json/huddlz/by_group?group_id=neighbors&page%5Bafter%5D=coffee"
+        let store = GroupDetailStore(id: "neighbors", client: DiscoveryClient { request in
+            if request.url?.path == "/api/json/groups/neighbors" {
+                return HTTPFixture.response(request, body: Self.group)
+            }
+            if HTTPFixture.parameters(request)["page[after]"] != nil {
+                return try await pendingMore.fetch(request)
+            }
+            return HTTPFixture.response(request, body: HTTPFixture.page([HTTPFixture.coffee], next: next))
+        })
+        await store.load(token: "member-token")
+        let more = Task { await store.loadMore() }
+        await pendingMore.waitUntilRequested()
+        #expect(store.isLoadingMore)
+        // Re-running load for the same viewer is a cache hit and leaves page two intact.
+        await store.load(token: "member-token")
+        pendingMore.finish(body: HTTPFixture.page([HTTPFixture.hike]))
+        await more.value
+        #expect(store.huddlz.map(\.id) == ["coffee", "hike"])
+        #expect(!store.isLoadingMore)
+        #expect(store.nextPage == nil)
+    }
+
     @Test("Authenticated discovery refuses HTTP redirects so bearer tokens never leave the API origin")
     func discoveryUsesNoRedirectPolicy() async throws {
-        let policy = try #require(DiscoveryClient.sharedSession.delegate as? AccountRedirectPolicy)
-        let url = URL(string: "https://huddlz.com/api/json/huddlz")!
-        let redirect = HTTPURLResponse(url: url, statusCode: 302, httpVersion: nil, headerFields: ["Location": "https://other.example/steal"])!
-        let nextRequest = URLRequest(url: URL(string: "https://other.example/steal")!)
-        let dummyTask = DiscoveryClient.sharedSession.dataTask(with: url)
-        let allowed: URLRequest? = await withCheckedContinuation { continuation in
-            policy.urlSession(DiscoveryClient.sharedSession, task: dummyTask,
-                              willPerformHTTPRedirection: redirect, newRequest: nextRequest) { request in
-                continuation.resume(returning: request)
-            }
+        let server = try LocalRedirectServer()
+        defer { server.stop() }
+        let client = DiscoveryClient(baseURL: server.baseURL)
+        await #expect {
+            try await client.search(DiscoveryQuery(), token: "secret-token")
+        } throws: { error in
+            if case DiscoveryError.unavailable = error { return true }
+            return false
         }
-        #expect(allowed == nil)
+        #expect(server.paths == ["/api/json/huddlz"])
     }
 
     // MARK: Searching once, as the right person
@@ -795,5 +845,88 @@ struct ModerationBehaviorTests {
         await account.restore()
         #expect(account.hasCheckedSession)
         #expect(await account.browsingToken() == (status == 200 ? "fixture-token" : nil))
+    }
+}
+
+/// Minimal loopback HTTP server that answers every request with a 302 redirect and records requested paths.
+private final class LocalRedirectServer: @unchecked Sendable {
+    let baseURL: URL
+    private let listenFD: Int32
+    private let lock = NSLock()
+    private var recordedPaths: [String] = []
+    private var stopped = false
+
+    var paths: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return recordedPaths
+    }
+
+    init() throws {
+        let fd = socket(AF_INET, SOCK_STREAM, 0)
+        guard fd >= 0 else { throw POSIXError(.EIO) }
+        var yes: Int32 = 1
+        setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, socklen_t(MemoryLayout<Int32>.size))
+        var address = sockaddr_in()
+        address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_port = 0
+        address.sin_addr = in_addr(s_addr: inet_addr("127.0.0.1"))
+        let bound = withUnsafePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+            }
+        }
+        guard bound == 0, listen(fd, 8) == 0 else {
+            close(fd)
+            throw POSIXError(.EADDRINUSE)
+        }
+        var assigned = sockaddr_in()
+        var length = socklen_t(MemoryLayout<sockaddr_in>.size)
+        _ = withUnsafeMutablePointer(to: &assigned) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                getsockname(fd, $0, &length)
+            }
+        }
+        let port = Int(UInt16(bigEndian: assigned.sin_port))
+        self.listenFD = fd
+        self.baseURL = URL(string: "http://127.0.0.1:\(port)")!
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in self?.serve() }
+    }
+
+    func stop() {
+        lock.lock()
+        stopped = true
+        lock.unlock()
+        shutdown(listenFD, SHUT_RDWR)
+        close(listenFD)
+    }
+
+    private func serve() {
+        while true {
+            let client = accept(listenFD, nil, nil)
+            if client < 0 {
+                lock.lock()
+                let isStopped = stopped
+                lock.unlock()
+                if isStopped { return }
+                continue
+            }
+            var buffer = [UInt8](repeating: 0, count: 4096)
+            let count = read(client, &buffer, buffer.count)
+            if count > 0, let request = String(bytes: buffer[..<count], encoding: .utf8),
+               let firstLine = request.split(separator: "\r\n").first {
+                let parts = firstLine.split(separator: " ")
+                if parts.count >= 2 {
+                    let path = String(parts[1].split(separator: "?").first ?? "")
+                    lock.lock()
+                    recordedPaths.append(path)
+                    lock.unlock()
+                }
+            }
+            let reply = "HTTP/1.1 302 Found\r\nLocation: \(baseURL.absoluteString)/redirected\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            _ = reply.withCString { write(client, $0, strlen($0)) }
+            close(client)
+        }
     }
 }

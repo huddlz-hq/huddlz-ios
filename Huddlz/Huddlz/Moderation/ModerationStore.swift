@@ -31,11 +31,8 @@ final class ModerationStore {
         let check = UUID()
         ownershipCheck = check
         isOwn = false
-        guard let userID = account.user?.id else {
-            checkedUserID = nil
-            return
-        }
-        if checkedUserID != userID { checkedUserID = nil }
+        checkedUserID = nil
+        guard let userID = account.user?.id else { return }
         // If the check fails, the menu stays: the server still refuses a report or block of yourself.
         let own = (try? await account.isOwn(subject)) ?? false
         guard check == ownershipCheck, !Task.isCancelled, account.user?.id == userID else { return }

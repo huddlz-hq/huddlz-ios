@@ -27,8 +27,12 @@ final class GroupDetailStore {
 
     /// Pass the session token to load as the signed-in person, so private groups load and blocked organizers stay out.
     func load(token: String? = nil) async {
+        if group != nil, loadedGroupToken == token, hasLoadedHuddlz, loadedToken == token {
+            return
+        }
         let request = UUID()
         revision = request
+        isLoadingMore = false
         if group != nil, loadedGroupToken != token {
             clearForViewerChange()
         }
