@@ -789,6 +789,48 @@ struct ModerationBehaviorTests {
         #expect(authorizations == ["Bearer member-token", nil])
     }
 
+    @Test("Signing in on a public huddl keeps it on screen while reloading so sign-up stays open")
+    func signingInKeepsPublicHuddlWhileReloading() async {
+        let pending = PendingHTTPResponse()
+        let store = HuddlDetailStore(id: "coffee", client: DiscoveryClient { request in
+            if request.value(forHTTPHeaderField: "Authorization") != nil {
+                return try await pending.fetch(request)
+            }
+            return HTTPFixture.response(request, body: "{\"data\":\(HTTPFixture.coffee)}")
+        })
+        await store.load(token: nil)
+        #expect(store.huddl?.title == "Coffee with neighbors")
+
+        let reload = Task { await store.load(token: "member-token") }
+        await pending.waitUntilRequested()
+        // Keeping the public huddl mounted avoids tearing down the RSVP sign-up sheet mid-flow.
+        #expect(store.huddl?.title == "Coffee with neighbors")
+        #expect(store.errorMessage == nil)
+        pending.finish(body: "{\"data\":\(HTTPFixture.coffee)}")
+        await reload.value
+        #expect(store.huddl?.title == "Coffee with neighbors")
+        #expect(store.errorMessage == nil)
+    }
+
+    @Test("A transient reload failure keeps a loaded huddl on screen, while a 404 clears it")
+    func transientDetailReloadErrorKeepsHuddl() async {
+        var responses = [(200, "{\"data\":\(HTTPFixture.coffee)}"), (503, "{}"), (404, "{}")]
+        let store = HuddlDetailStore(id: "coffee", client: DiscoveryClient { request in
+            let next = responses.removeFirst()
+            return HTTPFixture.response(request, body: next.1, status: next.0)
+        })
+        await store.load(token: "member-token")
+        #expect(store.huddl?.title == "Coffee with neighbors")
+
+        await store.load(token: "member-token")
+        #expect(store.huddl?.title == "Coffee with neighbors")
+        #expect(store.errorMessage == nil)
+
+        await store.load(token: "member-token")
+        #expect(store.huddl == nil)
+        #expect(store.errorMessage == "This huddl is no longer available.")
+    }
+
     @Test("A cached group load does not interrupt an in-flight next batch")
     func cachedGroupLoadPreservesInFlightLoadMore() async {
         let pendingMore = PendingHTTPResponse()

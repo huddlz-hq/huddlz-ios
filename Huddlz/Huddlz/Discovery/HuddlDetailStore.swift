@@ -20,7 +20,8 @@ final class HuddlDetailStore {
     func load(token: String? = nil) async {
         let request = UUID()
         revision = request
-        if loadedToken != token {
+        // Drop member-only details as soon as a signed-in viewer leaves, but keep a public huddl on screen while a visitor signs in.
+        if loadedToken != nil, loadedToken != token {
             huddl = nil
             loadedToken = nil
         }
@@ -32,9 +33,13 @@ final class HuddlDetailStore {
             loadedToken = token
         } catch {
             guard !Task.isCancelled, request == revision else { return }
-            huddl = nil
-            loadedToken = nil
-            errorMessage = error.localizedDescription
+            let notFound: Bool
+            if case DiscoveryError.notFound = error { notFound = true } else { notFound = false }
+            if huddl == nil || notFound {
+                huddl = nil
+                loadedToken = nil
+                errorMessage = error.localizedDescription
+            }
         }
     }
 }
