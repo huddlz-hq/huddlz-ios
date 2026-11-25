@@ -154,6 +154,8 @@ final class AccountStore {
             return value
         } catch AccountError.unauthorized {
             guard user?.id == userID, session == sessionRevision else { throw CancellationError() }
+            isBusy = true
+            defer { isBusy = false }
             user = nil
             canRetrySession = false
             try? await tokens.clear()

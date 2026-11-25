@@ -79,7 +79,7 @@ struct AccountView: View {
         }
         .scrollBounceBehavior(.basedOnSize)
         .presentationBackground(.regularMaterial)
-        .presentationDetents(dynamicTypeSize.isAccessibilitySize || isRegistering ? [.large] : [.height(account.user == nil ? 700 : 480), .large])
+        .presentationDetents(dynamicTypeSize.isAccessibilitySize || isRegistering ? [.large] : [.height(account.user == nil ? 760 : 540), .large])
         .presentationDragIndicator(.visible)
         .interactiveDismissDisabled(account.isBusy)
         .sheet(isPresented: $isResettingPassword) { PasswordResetView(email: $email) }
@@ -218,6 +218,7 @@ struct AccountView: View {
                 Image(systemName: "arrow.up.forward")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
