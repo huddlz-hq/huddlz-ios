@@ -60,7 +60,13 @@ struct DiscoveryView: View {
         .background { AmbientBackground() }
         .background { SearchBadgeLoader(store: badges, huddlIDs: visibleHuddlIDs, refresh: badgeRefresh) }
         .toolbar(horizontalSizeClass == .compact ? .hidden : .automatic, for: .navigationBar)
-        .task(id: preferences.query) { await store.load(preferences.query) }
+        // The first search waits for the saved session check, so it runs once, as the right person.
+        .task(id: SearchRequest(query: preferences.query, userID: account.user?.id, isReady: account.hasCheckedSession)) {
+            guard account.hasCheckedSession else { return }
+            await store.load(preferences.query, token: await account.browsingToken())
+        }
+        // A block or unblock takes effect in place, keeping the cards on screen meanwhile.
+        .onChange(of: account.blockRevision) { Task { await refresh() } }
         // The search-role tab shows this field in the tab bar and expands it when tapped.
         .searchable(text: $searchText, prompt: "Search huddlz")
         .searchToolbarBehavior(.minimize)
@@ -70,7 +76,7 @@ struct DiscoveryView: View {
     }
 
     private func refresh() async {
-        await store.refresh(preferences.query)
+        await store.refresh(preferences.query, token: await account.browsingToken())
         badgeRefresh = UUID()
     }
 
@@ -171,7 +177,7 @@ struct DiscoveryView: View {
             }
             .frame(maxWidth: .infinity)
         }
-        if store.isLoading {
+        if store.isLoading || !account.hasCheckedSession {
             ProgressView("Finding huddlz…")
                 .frame(maxWidth: .infinity, minHeight: 180)
                 .accessibilityIdentifier("discovery-loading")
@@ -181,7 +187,7 @@ struct DiscoveryView: View {
             } description: {
                 Text(message)
             } actions: {
-                Button("Try again") { Task { await store.search(preferences.query) } }
+                Button("Try again") { Task { await store.search(preferences.query, token: await account.browsingToken()) } }
                     .buttonStyle(.glassProminent)
             }
         } else if store.huddlz.isEmpty {
@@ -218,6 +224,12 @@ struct DiscoveryView: View {
             }
         }
     }
+}
+
+private struct SearchRequest: Equatable {
+    let query: DiscoveryQuery
+    let userID: String?
+    let isReady: Bool
 }
 
 // Keep pagination observation separate from the view that owns native refresh.

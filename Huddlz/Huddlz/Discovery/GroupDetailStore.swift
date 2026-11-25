@@ -15,13 +15,17 @@ final class GroupDetailStore {
     private(set) var isLoadingMore = false
     private(set) var moreError = false
     private let client: DiscoveryClient
+    private var revision = UUID()
+    /// The session the cards on screen were fetched with; further batches use the same one.
+    private var loadedToken: String?
 
     init(id: String, client: DiscoveryClient? = nil) {
         self.id = id
         self.client = client ?? DiscoveryClient()
     }
 
-    func load() async {
+    /// Pass the session token to load as the signed-in person, so huddlz from organizers they blocked stay out.
+    func load(token: String? = nil) async {
         if group == nil {
             errorMessage = nil
             do {
@@ -39,32 +43,50 @@ final class GroupDetailStore {
             }
         }
         guard !hasLoadedHuddlz else { return }
+        let request = UUID()
+        revision = request
         huddlzError = nil
         do {
-            let page = try await client.groupHuddlz(id: id)
+            let page = try await client.groupHuddlz(id: id, token: token)
             try Task.checkCancellation()
+            guard request == revision else { return }
             huddlz = page.huddlz
             nextPage = page.next
+            loadedToken = token
             hasLoadedHuddlz = true
         } catch {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, request == revision else { return }
             huddlzError = "Please try again."
         }
     }
 
+    /// Fetches the huddlz again after a block or unblock, or once someone signs in or out.
+    func reloadHuddlz(token: String? = nil) async {
+        revision = UUID()
+        hasLoadedHuddlz = false
+        huddlz = []
+        nextPage = nil
+        moreError = false
+        // Until the group itself has loaded, its own load fetches the huddlz.
+        guard group != nil else { return }
+        await load(token: token)
+    }
+
     func loadMore() async {
         guard !isLoadingMore, let url = nextPage else { return }
+        let request = revision
         isLoadingMore = true
         moreError = false
         defer { isLoadingMore = false }
         do {
-            let page = try await client.groupPage(at: url, id: id)
+            let page = try await client.groupPage(at: url, id: id, token: loadedToken)
             try Task.checkCancellation()
+            guard request == revision else { return }
             var ids = Set(huddlz.map(\.id))
             huddlz.append(contentsOf: page.huddlz.filter { ids.insert($0.id).inserted })
             nextPage = page.next == url ? nil : page.next
         } catch {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, request == revision else { return }
             moreError = true
         }
     }

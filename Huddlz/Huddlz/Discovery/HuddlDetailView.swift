@@ -77,6 +77,8 @@ struct HuddlDetailView: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
+        // Applied before the page's own toolbar so the More menu lands last, at the trailing edge.
+        .moderation(of: .huddl(id), isShown: huddl != nil)
         .toolbar {
             // The page's own title names the huddl; the bar takes the name only once that title scrolls under it.
             ToolbarItem(placement: .principal) {

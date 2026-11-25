@@ -16,15 +16,22 @@ final class DiscoveryStore {
     private let client: DiscoveryClient
     private var revision = UUID()
     private var loadedQuery: DiscoveryQuery?
+    /// The session the cards on screen were fetched with; further batches use the same one.
+    private var loadedToken: String?
 
     init(client: DiscoveryClient? = nil) { self.client = client ?? DiscoveryClient() }
 
-    func load(_ query: DiscoveryQuery) async {
-        guard loadedQuery != query else { return }
-        await search(query)
+    /// Pass the session token to search as the signed-in person, or nil to search as a visitor.
+    func load(_ query: DiscoveryQuery, token: String? = nil) async {
+        if loadedQuery != query {
+            await search(query, token: token)
+        } else if loadedToken != token {
+            // Signing in or out re-runs the same search as that person, keeping the cards meanwhile.
+            await refresh(query, token: token)
+        }
     }
 
-    func search(_ query: DiscoveryQuery) async {
+    func search(_ query: DiscoveryQuery, token: String? = nil) async {
         let request = UUID()
         revision = request
         loadedQuery = nil
@@ -38,18 +45,19 @@ final class DiscoveryStore {
         moreError = nil
         defer { if request == revision { isLoading = false } }
         do {
-            let page = try await client.search(query)
+            let page = try await client.search(query, token: token)
             guard request == revision, !Task.isCancelled else { return }
             huddlz = page.huddlz
             nextPage = page.next
             loadedQuery = query
+            loadedToken = token
         } catch {
             guard request == revision, !Task.isCancelled else { return }
             errorMessage = error.localizedDescription
         }
     }
 
-    func refresh(_ query: DiscoveryQuery) async {
+    func refresh(_ query: DiscoveryQuery, token: String? = nil) async {
         guard !isLoading, !isRefreshing else { return }
         let request = UUID()
         revision = request
@@ -57,10 +65,11 @@ final class DiscoveryStore {
         isLoadingMore = false
         defer { if request == revision { isRefreshing = false } }
         do {
-            let page = try await client.search(query)
+            let page = try await client.search(query, token: token)
             guard request == revision, !Task.isCancelled else { return }
             huddlz = page.huddlz
             nextPage = page.next
+            loadedToken = token
             errorMessage = nil
             refreshError = nil
             moreError = nil
@@ -77,7 +86,7 @@ final class DiscoveryStore {
         moreError = nil
         defer { if request == revision { isLoadingMore = false } }
         do {
-            let page = try await client.page(at: url)
+            let page = try await client.page(at: url, token: loadedToken)
             guard request == revision, !Task.isCancelled else { return }
             var ids = Set(huddlz.map(\.id))
             huddlz.append(contentsOf: page.huddlz.filter { ids.insert($0.id).inserted })
