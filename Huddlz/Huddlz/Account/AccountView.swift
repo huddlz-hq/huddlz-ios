@@ -11,6 +11,7 @@ struct AccountView: View {
     @State private var isResettingPassword = false
     @State private var isRegistering = false
     @State private var isChoosingHome = false
+    @State private var showsBlockedPeople = false
     @FocusState private var focusedField: Field?
 
     private enum Field: Hashable { case email, password, visiblePassword }
@@ -42,6 +43,7 @@ struct AccountView: View {
                 }
                 if let user = account.user {
                     identity(user)
+                    blockedPeopleRow
                     Button(role: .destructive) { Task { await account.signOut() } } label: {
                         Text("Sign out")
                             .font(.headline)
@@ -75,14 +77,15 @@ struct AccountView: View {
             .frame(maxWidth: 560)
             .frame(maxWidth: .infinity)
             // The reset sheet stacks on this one; its fields must not be read (or tapped) through it.
-            .accessibilityHidden(isResettingPassword)
+            .accessibilityHidden(isResettingPassword || showsBlockedPeople)
         }
         .scrollBounceBehavior(.basedOnSize)
         .presentationBackground(.regularMaterial)
-        .presentationDetents(dynamicTypeSize.isAccessibilitySize || isRegistering ? [.large] : [.height(account.user == nil ? 760 : 540), .large])
+        .presentationDetents(dynamicTypeSize.isAccessibilitySize || isRegistering ? [.large] : [.height(account.user == nil ? 760 : 620), .large])
         .presentationDragIndicator(.visible)
         .interactiveDismissDisabled(account.isBusy)
         .sheet(isPresented: $isResettingPassword) { PasswordResetView(email: $email) }
+        .sheet(isPresented: $showsBlockedPeople) { BlockedPeopleView() }
     }
 
     private var title: String {
@@ -193,6 +196,28 @@ struct AccountView: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .surfaceCard()
+    }
+
+    private var blockedPeopleRow: some View {
+        Button { showsBlockedPeople = true } label: {
+            HStack {
+                Label("Blocked people", systemImage: "hand.raised")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.primary)
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .surfaceCard()
+        .disabled(account.isBusy)
     }
 
     private var supportAndLegalLinks: some View {
