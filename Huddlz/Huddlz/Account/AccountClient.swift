@@ -4,6 +4,9 @@ struct AccountUser: Decodable, Equatable {
     let id: String
     let email: String
     let displayName: String?
+    let avatarUrl: String?
+
+    var avatarURL: URL? { URL.huddlzMedia(avatarUrl) }
 }
 
 struct AccountSession: Decodable {
@@ -316,7 +319,7 @@ struct AccountClient {
             let links: Links?
             struct Links: Decodable { let next: URL? }
         }
-        let document = try JSONDecoder().decode(Document.self, from: data)
+        let document = try JSONDecoder.huddlz.decode(Document.self, from: data)
         return GroupsPage(groups: document.data, next: document.links?.next)
     }
 

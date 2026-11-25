@@ -5,7 +5,7 @@ import Testing
 @MainActor
 struct GroupsBehaviorTests {
     private static let session = #"{"token":"fixture-token","user":{"id":"neighbor","email":"neighbor@example.com"}}"#
-    private static let neighbors = #"{"type":"group","id":"neighbors","attributes":{"name":"Juniper Neighbors","location":"Austin, TX"}}"#
+    private static let neighbors = #"{"type":"group","id":"neighbors","attributes":{"name":"Juniper Neighbors","location":"Austin, TX","image_url":"https://huddlz.com/uploads/groups/neighbors_thumb.jpg"}}"#
 
     @Test("A groups response that arrives after signing out cannot fill the list")
     func lateGroupsCannotOutliveTheAccount() async throws {
@@ -46,6 +46,7 @@ struct GroupsBehaviorTests {
         let store = GroupsStore()
         await store.load(account: account)
         #expect(store.groups.map(\.id) == ["neighbors"])
+        #expect(store.groups.first?.imageURL?.absoluteString == "https://huddlz.com/uploads/groups/neighbors_thumb.jpg")
         #expect(store.nextPage != nil)
         await store.loadMore(account: account)
         #expect(store.moreFailed)

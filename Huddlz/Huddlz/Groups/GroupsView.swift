@@ -93,7 +93,7 @@ private struct GroupRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            GroupTile(name: group.attributes.name)
+            GroupTile(name: group.attributes.name, imageURL: group.imageURL)
             VStack(alignment: .leading, spacing: 3) {
                 Text(group.attributes.name).font(.headline)
                 if let location = group.attributes.location, !location.isEmpty {

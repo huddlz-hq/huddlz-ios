@@ -89,4 +89,18 @@ struct GroupDetailBehaviorTests {
         #expect(store.huddlz.map(\.id) == ["coffee", "hike"])
         #expect(store.nextPage == nil)
     }
+
+    @Test("A group carries its safe image URL when present and ignores unsafe or missing links", arguments: [
+        ("\"https://huddlz.com/uploads/groups/neighbors_thumb.jpg\"", "https://huddlz.com/uploads/groups/neighbors_thumb.jpg"),
+        ("null", nil),
+        ("\"javascript:alert(1)\"", nil),
+        ("\"   \"", nil)
+    ] as [(String, String?)])
+    func groupImageURLValidation(rawValue: String, expected: String?) async {
+        let groupBody = #"{"data":{"type":"group","id":"neighbors","attributes":{"name":"Juniper Neighbors","description":null,"location":"Austin, TX","image_url":\#(rawValue)}}}"#
+        let store = GroupDetailStore(id: "neighbors", client: Self.client(group: { (200, groupBody) },
+                                                                            huddlz: { (200, HTTPFixture.page([])) }))
+        await store.load()
+        #expect(store.group?.imageURL?.absoluteString == expected)
+    }
 }
