@@ -54,7 +54,7 @@ struct DeleteAccountView: View {
         .interactiveDismissDisabled(account.isBusy)
     }
 
-    static let consequences = "Your name, email, photo, and API keys are removed, and you leave your groups and give up your upcoming RSVPs. Groups you own are archived and their upcoming huddlz cancelled. Past huddlz show you as “Deleted member.” Enter your password to confirm."
+    static let consequences = "Your name, email, photo, and API keys are removed, and you leave your groups and give up your upcoming RSVPs. Groups you own are archived and their upcoming huddlz cancelled. Archived groups keep their name, description, photos, and past huddlz for members. Past huddlz show you as “Deleted member.” Enter your password to confirm."
 
     private var canDelete: Bool { !password.isEmpty && !account.isBusy }
 
@@ -65,6 +65,7 @@ struct DeleteAccountView: View {
         Task {
             errorMessage = await account.deleteAccount(password: password)
             password = ""
+            if let errorMessage { AccessibilityNotification.Announcement(errorMessage).post() }
             if account.user == nil { dismiss() }
         }
     }

@@ -215,8 +215,10 @@ final class AccountStore {
             return nil
         } catch AccountError.rateLimited {
             return "Too many attempts. Please try again later."
-        } catch {
+        } catch is URLError {
             return "Couldn’t delete your account. Check your connection and try again."
+        } catch {
+            return "Couldn’t delete your account. Please try again later."
         }
         user = nil
         canRetrySession = false
