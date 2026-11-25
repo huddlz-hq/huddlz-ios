@@ -189,4 +189,74 @@ struct AccountBehaviorTests {
         #expect(checkedSession)
         #expect(reopened.user?.displayName == "Our Neighbor")
     }
+
+    @Test("Deleting the account confirms with the password and forgets the saved session")
+    func deletingTheAccountForgetsTheSession() async throws {
+        let tokens = SessionTokenStore(service: "com.huddlz.tests.\(UUID())")
+        defer { Task { try? await tokens.clear() } }
+        var deleted = false
+        let client = AccountClient { request in
+            if request.url?.path == "/api/auth/sign_in" { return HTTPFixture.response(request, body: Self.session) }
+            #expect(request.url?.absoluteString == "https://huddlz.com/api/auth/account")
+            #expect(request.httpMethod == "DELETE")
+            #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer fixture-token")
+            let body = try JSONSerialization.jsonObject(with: try #require(request.httpBody)) as? [String: String]
+            #expect(body == ["password": "sample-password"])
+            deleted = true
+            return HTTPFixture.response(request, body: "", status: 204)
+        }
+        let account = AccountStore(client: client, tokens: tokens)
+        await account.signIn(email: "neighbor@example.com", password: "sample-password")
+        let refusal = await account.deleteAccount(password: "sample-password")
+        #expect(deleted)
+        #expect(refusal == nil)
+        #expect(account.user == nil)
+        #expect(account.message == "Your account was deleted.")
+        #expect(try await tokens.load() == nil)
+        let reopened = AccountStore(client: client, tokens: tokens)
+        await reopened.restore()
+        #expect(reopened.user == nil)
+    }
+
+    @Test("An expired session during deletion clears the saved login and asks for sign-in")
+    func expiredSessionDuringDeletion() async throws {
+        let tokens = SessionTokenStore(service: "com.huddlz.tests.\(UUID())")
+        defer { Task { try? await tokens.clear() } }
+        let client = AccountClient { request in
+            if request.url?.path == "/api/auth/sign_in" { return HTTPFixture.response(request, body: Self.session) }
+            #expect(request.url?.path == "/api/auth/account")
+            return HTTPFixture.response(request, body: "{}", status: 401)
+        }
+        let account = AccountStore(client: client, tokens: tokens)
+        await account.signIn(email: "neighbor@example.com", password: "sample-password")
+        try #require(try await tokens.load() == "fixture-token")
+        _ = await account.deleteAccount(password: "sample-password")
+        #expect(account.user == nil)
+        #expect(try await tokens.load() == nil)
+        #expect(account.message == "Your session has expired. Sign in again to delete your account.")
+    }
+
+    @Test("A refused or failed deletion keeps the account signed in", arguments: [403, 422, 429, 500, 503, -1])
+    func refusedDeletionKeepsTheAccount(status: Int) async throws {
+        let tokens = SessionTokenStore(service: "com.huddlz.tests.\(UUID())")
+        defer { Task { try? await tokens.clear() } }
+        let client = AccountClient { request in
+            if request.url?.path == "/api/auth/sign_in" { return HTTPFixture.response(request, body: Self.session) }
+            if status < 0 { throw URLError(.notConnectedToInternet) }
+            let body = #"{"errors":[{"field":"password","message":"That password isn’t right."}]}"#
+            return HTTPFixture.response(request, body: body, status: status)
+        }
+        let account = AccountStore(client: client, tokens: tokens)
+        await account.signIn(email: "neighbor@example.com", password: "sample-password")
+        let refusal = await account.deleteAccount(password: "wrong-password")
+        let messages = [
+            -1: "Couldn’t delete your account. Check your connection and try again.",
+            422: "That password isn’t right.",
+            429: "Too many attempts. Please try again later."
+        ]
+        #expect(refusal == (messages[status] ?? "Couldn’t delete your account. Please try again later."))
+        #expect(account.user?.email == "neighbor@example.com")
+        #expect(!account.isBusy)
+        #expect(try await tokens.load() == "fixture-token")
+    }
 }
