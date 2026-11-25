@@ -10,7 +10,7 @@ struct DiscoveryView: View {
     @State private var preferences = DiscoveryPreferences()
     @Environment(AccountStore.self) private var account
     @State private var isChoosingLocation = false
-    @State private var visibleHuddlIDs: Set<Huddl.ID> = []
+    @State private var visibility = DiscoveryScrollVisibility()
 
     var body: some View {
         NavigationStack {
@@ -58,9 +58,25 @@ struct DiscoveryView: View {
             }
         }
         .background { AmbientBackground() }
-        .background { SearchBadgeLoader(store: badges, huddlIDs: visibleHuddlIDs, refresh: badgeRefresh) }
+        .background { SearchBadgeLoader(store: badges, visibility: visibility, refresh: badgeRefresh) }
+        .background { DiscoveryPaginationLoader(store: store, visibility: visibility) }
+        .onChange(of: store.isLoading) { _, isLoading in
+            if isLoading { visibility.clear() }
+        }
         .toolbar(horizontalSizeClass == .compact ? .hidden : .automatic, for: .navigationBar)
-        .task(id: preferences.query) { await store.load(preferences.query) }
+        // The first search waits for the saved session check, so it runs once, as the right person.
+        .task(id: SearchRequest(query: preferences.query, userID: account.user?.id, isReady: account.hasCheckedSession)) {
+            guard account.hasCheckedSession else { return }
+            await store.load(preferences.query, token: await account.browsingToken())
+        }
+        // A block or unblock clears pre-block cards and supersedes any earlier search or refresh.
+        .onChange(of: account.blockRevision) {
+            Task {
+                guard account.hasCheckedSession else { return }
+                await store.search(preferences.query, token: await account.browsingToken())
+                badgeRefresh = UUID()
+            }
+        }
         // The search-role tab shows this field in the tab bar and expands it when tapped.
         .searchable(text: $searchText, prompt: "Search huddlz")
         .searchToolbarBehavior(.minimize)
@@ -70,7 +86,7 @@ struct DiscoveryView: View {
     }
 
     private func refresh() async {
-        await store.refresh(preferences.query)
+        await store.refresh(preferences.query, token: await account.browsingToken())
         badgeRefresh = UUID()
     }
 
@@ -171,7 +187,7 @@ struct DiscoveryView: View {
             }
             .frame(maxWidth: .infinity)
         }
-        if store.isLoading {
+        if store.isLoading || !account.hasCheckedSession {
             ProgressView("Finding huddlz…")
                 .frame(maxWidth: .infinity, minHeight: 180)
                 .accessibilityIdentifier("discovery-loading")
@@ -181,7 +197,7 @@ struct DiscoveryView: View {
             } description: {
                 Text(message)
             } actions: {
-                Button("Try again") { Task { await store.search(preferences.query) } }
+                Button("Try again") { Task { await store.search(preferences.query, token: await account.browsingToken()) } }
                     .buttonStyle(.glassProminent)
             }
         } else if store.huddlz.isEmpty {
@@ -204,61 +220,72 @@ struct DiscoveryView: View {
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("huddl-\(huddl.id)")
                         .onScrollVisibilityChange(threshold: 0.1) { visible in
-                            if visible {
-                                visibleHuddlIDs.insert(huddl.id)
-                            } else {
-                                visibleHuddlIDs.remove(huddl.id)
-                            }
+                            visibility.setVisible(visible, for: huddl.id)
                         }
                 }
                 if let message = store.moreError {
                     Text(message).foregroundStyle(.secondary)
                 }
-                DiscoveryPaginationFooter(store: store, visibleHuddlIDs: visibleHuddlIDs)
+                DiscoveryPaginationFooter(store: store)
             }
         }
+    }
+}
+
+private struct SearchRequest: Equatable {
+    let query: DiscoveryQuery
+    let userID: String?
+    let isReady: Bool
+}
+
+// Keep pagination triggers outside the lazy scroll stack so scroll visibility updates do not rebuild Discover.
+private struct DiscoveryPaginationLoader: View {
+    let store: DiscoveryStore
+    let visibility: DiscoveryScrollVisibility
+
+    private var automaticNextPage: URL? {
+        guard !store.isRefreshing,
+              store.moreError == nil,
+              let lastID = store.huddlz.last?.id,
+              visibility.huddlIDs.contains(lastID) else { return nil }
+        return store.nextPage
+    }
+
+    var body: some View {
+        Color.clear
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .onChange(of: automaticNextPage, initial: true) { _, next in
+                guard let next else { return }
+                Task {
+                    guard automaticNextPage == next else { return }
+                    await store.loadMore()
+                }
+            }
     }
 }
 
 // Keep pagination observation separate from the view that owns native refresh.
 private struct DiscoveryPaginationFooter: View {
     let store: DiscoveryStore
-    let visibleHuddlIDs: Set<Huddl.ID>
-
-    private var automaticNextPage: URL? {
-        guard !store.isRefreshing,
-              store.moreError == nil,
-              let lastID = store.huddlz.last?.id,
-              visibleHuddlIDs.contains(lastID) else { return nil }
-        return store.nextPage
-    }
 
     var body: some View {
-        Group {
-            if store.nextPage != nil {
-                Group {
-                    if store.isLoadingMore {
-                        ProgressView("Loading more…")
-                            .accessibilityIdentifier("pagination-loading")
-                    } else if store.moreError != nil {
-                        Button("Try loading more again") {
-                            Task { await store.loadMore() }
-                        }
-                        .buttonStyle(.glass)
-                        .disabled(store.isRefreshing)
-                    } else {
-                        Color.clear.accessibilityHidden(true)
+        if store.nextPage != nil {
+            ZStack {
+                if store.isLoadingMore {
+                    ProgressView("Loading more…")
+                        .accessibilityIdentifier("pagination-loading")
+                } else if store.moreError != nil {
+                    Button("Try loading more again") {
+                        Task { await store.loadMore() }
                     }
+                    .buttonStyle(.glass)
+                    .disabled(store.isRefreshing)
+                } else {
+                    Color.clear.accessibilityHidden(true)
                 }
-                .frame(maxWidth: .infinity, minHeight: 48)
             }
-        }
-        .onChange(of: automaticNextPage, initial: true) { _, next in
-            guard let next else { return }
-            Task {
-                guard automaticNextPage == next else { return }
-                await store.loadMore()
-            }
+            .frame(maxWidth: .infinity, minHeight: 56)
         }
     }
 }

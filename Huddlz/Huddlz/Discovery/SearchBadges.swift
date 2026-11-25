@@ -11,14 +11,34 @@ struct SearchBadgeCard: View {
     }
 }
 
+@MainActor
+@Observable
+final class DiscoveryScrollVisibility {
+    private(set) var huddlIDs: Set<Huddl.ID> = []
+
+    func setVisible(_ visible: Bool, for id: Huddl.ID) {
+        if visible {
+            if !huddlIDs.contains(id) { huddlIDs.insert(id) }
+        } else if huddlIDs.contains(id) {
+            huddlIDs.remove(id)
+        }
+    }
+
+    func clear() {
+        guard !huddlIDs.isEmpty else { return }
+        huddlIDs = []
+    }
+}
+
 struct SearchBadgeLoader: View {
     let store: SearchBadgeStore
-    let huddlIDs: Set<String>
+    let visibility: DiscoveryScrollVisibility
     let refresh: UUID
     @Environment(AccountStore.self) private var account
     @Environment(\.scenePhase) private var phase
 
     var body: some View {
+        let huddlIDs = visibility.huddlIDs
         Color.clear
             .allowsHitTesting(false)
             .accessibilityHidden(true)

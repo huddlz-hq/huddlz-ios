@@ -12,7 +12,11 @@ final class AccountStore {
     private(set) var isBusy = false
     private(set) var message: String?
     private(set) var canRetrySession = false
+    /// False until the saved session has been checked once, so the first search can wait to run as this person.
+    private(set) var hasCheckedSession = false
     private(set) var attendanceRevision = UUID()
+    /// Changes whenever this person blocks or unblocks someone, so lists drop or restore their huddlz.
+    private(set) var blockRevision = UUID()
     private let tokens: SessionTokenStore
     private let client: AccountClient
     #if DEBUG
@@ -47,7 +51,10 @@ final class AccountStore {
         isBusy = true
         canRetrySession = false
         message = nil
-        defer { isBusy = false }
+        defer {
+            isBusy = false
+            hasCheckedSession = true
+        }
         do {
             #if DEBUG
             // Seed only the isolated UI-test Keychain, then use normal session restoration.
@@ -140,6 +147,36 @@ final class AccountStore {
 
     func groupsPage(at url: URL) async throws -> GroupsPage {
         try await forCurrentUser { token in try await client.groupsPage(at: url, token: token) }
+    }
+
+    /// The session token for browsing as this person, or nil to browse as a visitor.
+    func browsingToken() async -> String? {
+        guard user != nil else { return nil }
+        return try? await tokens.load()
+    }
+
+    func isOwn(_ subject: ModerationSubject) async throws -> Bool {
+        try await forCurrentUser { token in try await client.isOwn(subject, token: token) }
+    }
+
+    func report(_ subject: ModerationSubject, reason: ReportReason, details: String) async throws {
+        try await forCurrentUser { token in
+            try await client.report(subject, reason: reason, details: details, token: token)
+        }
+    }
+
+    func block(_ subject: ModerationSubject) async throws {
+        try await forCurrentUser { token in try await client.block(subject, token: token) }
+        blockRevision = UUID()
+    }
+
+    func blockedPeople() async throws -> [BlockedPerson] {
+        try await forCurrentUser { token in try await client.blockedPeople(token: token) }
+    }
+
+    func unblock(_ person: BlockedPerson) async throws {
+        try await forCurrentUser { token in try await client.unblock(person, token: token) }
+        blockRevision = UUID()
     }
 
     /// Runs an authenticated request and discards its result if the account changed meanwhile.

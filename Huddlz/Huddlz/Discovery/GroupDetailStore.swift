@@ -15,21 +15,36 @@ final class GroupDetailStore {
     private(set) var isLoadingMore = false
     private(set) var moreError = false
     private let client: DiscoveryClient
+    private var revision = UUID()
+    /// The session the group and cards on screen were fetched with; further batches use the same one.
+    private var loadedGroupToken: String?
+    private var loadedToken: String?
 
     init(id: String, client: DiscoveryClient? = nil) {
         self.id = id
         self.client = client ?? DiscoveryClient()
     }
 
-    func load() async {
+    /// Pass the session token to load as the signed-in person, so private groups load and blocked organizers stay out.
+    func load(token: String? = nil) async {
+        if group != nil, loadedGroupToken == token, hasLoadedHuddlz, loadedToken == token {
+            return
+        }
+        let request = UUID()
+        revision = request
+        isLoadingMore = false
+        if group != nil, loadedGroupToken != token {
+            clearForViewerChange()
+        }
         if group == nil {
             errorMessage = nil
             do {
-                let result = try await client.group(id: id)
-                try Task.checkCancellation()
+                let result = try await client.group(id: id, token: token)
+                guard !Task.isCancelled, request == revision else { return }
                 group = result
+                loadedGroupToken = token
             } catch {
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled, request == revision else { return }
                 if case DiscoveryError.notFound = error {
                     errorMessage = "This group is no longer available."
                 } else {
@@ -38,33 +53,73 @@ final class GroupDetailStore {
                 return
             }
         }
-        guard !hasLoadedHuddlz else { return }
+        guard !hasLoadedHuddlz || loadedToken != token else { return }
+        if loadedToken != token {
+            huddlz = []
+            nextPage = nil
+            moreError = false
+            isLoadingMore = false
+            hasLoadedHuddlz = false
+            loadedToken = nil
+        }
         huddlzError = nil
         do {
-            let page = try await client.groupHuddlz(id: id)
-            try Task.checkCancellation()
+            let page = try await client.groupHuddlz(id: id, token: token)
+            guard !Task.isCancelled, request == revision else { return }
             huddlz = page.huddlz
             nextPage = page.next
+            loadedToken = token
             hasLoadedHuddlz = true
         } catch {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, request == revision else { return }
             huddlzError = "Please try again."
         }
     }
 
+    /// Fetches again after a block or unblock, or once someone signs in or out.
+    func reloadHuddlz(token: String? = nil) async {
+        if group != nil, loadedGroupToken != token {
+            clearForViewerChange()
+        } else {
+            hasLoadedHuddlz = false
+            huddlz = []
+            nextPage = nil
+            moreError = false
+            isLoadingMore = false
+            huddlzError = nil
+            loadedToken = nil
+        }
+        await load(token: token)
+    }
+
+    private func clearForViewerChange() {
+        group = nil
+        loadedGroupToken = nil
+        errorMessage = nil
+        hasLoadedHuddlz = false
+        huddlz = []
+        nextPage = nil
+        moreError = false
+        isLoadingMore = false
+        huddlzError = nil
+        loadedToken = nil
+    }
+
     func loadMore() async {
         guard !isLoadingMore, let url = nextPage else { return }
+        let request = revision
         isLoadingMore = true
         moreError = false
-        defer { isLoadingMore = false }
+        defer { if request == revision { isLoadingMore = false } }
         do {
-            let page = try await client.groupPage(at: url, id: id)
+            let page = try await client.groupPage(at: url, id: id, token: loadedToken)
             try Task.checkCancellation()
+            guard request == revision else { return }
             var ids = Set(huddlz.map(\.id))
             huddlz.append(contentsOf: page.huddlz.filter { ids.insert($0.id).inserted })
             nextPage = page.next == url ? nil : page.next
         } catch {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, request == revision else { return }
             moreError = true
         }
     }

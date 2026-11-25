@@ -3,12 +3,20 @@ import SwiftUI
 struct HuddlDetailView: View {
     let id: Huddl.ID
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @State private var huddl: Huddl?
-    @State private var errorMessage: String?
+    @Environment(AccountStore.self) private var account
+    @State private var store: HuddlDetailStore
     @State private var reload = UUID()
     @State private var titleBottom = CGFloat.infinity
     @State private var scrolled: CGFloat = 0
     @State private var addsToCalendar = false
+
+    init(id: Huddl.ID) {
+        self.id = id
+        _store = State(initialValue: HuddlDetailStore(id: id))
+    }
+
+    private var huddl: Huddl? { store.huddl }
+    private var errorMessage: String? { store.errorMessage }
 
     var body: some View {
         ScrollView {
@@ -77,6 +85,8 @@ struct HuddlDetailView: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
+        // Applied before the page's own toolbar so the More menu lands last, at the trailing edge.
+        .moderation(of: .huddl(id), isShown: huddl != nil)
         .toolbar {
             // The page's own title names the huddl; the bar takes the name only once that title scrolls under it.
             ToolbarItem(placement: .principal) {
@@ -102,7 +112,7 @@ struct HuddlDetailView: View {
         .sheet(isPresented: $addsToCalendar) {
             if let huddl { HuddlCalendarEditor(huddl: huddl).ignoresSafeArea() }
         }
-        .task(id: reload) { await load() }
+        .task(id: LoadKey(reload: reload, userID: account.user?.id)) { await load() }
     }
 
     /// The cover fades into whatever is behind it; on wide layouts it becomes a rounded band.
@@ -190,14 +200,11 @@ struct HuddlDetailView: View {
     }
 
     private func load() async {
-        errorMessage = nil
-        do {
-            let result = try await DiscoveryClient().detail(id: id)
-            guard !Task.isCancelled else { return }
-            huddl = result
-        } catch {
-            guard !Task.isCancelled else { return }
-            errorMessage = error.localizedDescription
-        }
+        await store.load(token: await account.browsingToken())
+    }
+
+    private struct LoadKey: Equatable {
+        let reload: UUID
+        let userID: String?
     }
 }

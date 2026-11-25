@@ -2,6 +2,7 @@ import SwiftUI
 
 struct GroupDetailView: View {
     let id: String
+    @Environment(AccountStore.self) private var account
     @State private var store: GroupDetailStore
     @State private var reload = UUID()
     @State private var moreRequest: UUID?
@@ -98,7 +99,12 @@ struct GroupDetailView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: titleBottom < scrolled)
+        .moderation(of: .group(id), isShown: group != nil)
         .task(id: reload) { await load() }
+        // A block or unblock, or signing in or out, changes which huddlz this person sees here.
+        .onChange(of: Viewer(userID: account.user?.id, blocks: account.blockRevision)) {
+            Task { await store.reloadHuddlz(token: await account.browsingToken()) }
+        }
         .task(id: moreRequest) {
             if moreRequest != nil { await loadMore() }
         }
@@ -113,6 +119,11 @@ struct GroupDetailView: View {
     private var isLoadingMore: Bool { store.isLoadingMore }
     private var moreError: Bool { store.moreError }
 
-    private func load() async { await store.load() }
+    private func load() async { await store.load(token: await account.browsingToken()) }
     private func loadMore() async { await store.loadMore() }
+
+    private struct Viewer: Equatable {
+        let userID: String?
+        let blocks: UUID
+    }
 }
