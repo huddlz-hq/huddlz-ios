@@ -113,9 +113,15 @@ struct DiscoveryClient {
         try Task.checkCancellation()
         guard let response = response as? HTTPURLResponse else { throw DiscoveryError.invalidResponse }
         // An expired session still browses, just as a visitor would.
-        if response.statusCode == 401, token != nil { return try await get(url) }
+        if response.statusCode == 401, token != nil {
+            do { return try await get(url) }
+            catch DiscoveryError.notFound { throw DiscoveryError.notFound }
+            catch is CancellationError { throw CancellationError() }
+            catch { throw DiscoveryError.forbidden }
+        }
         guard (200..<300).contains(response.statusCode) else {
             if response.statusCode == 404 { throw DiscoveryError.notFound }
+            if response.statusCode == 403 { throw DiscoveryError.forbidden }
             throw DiscoveryError.unavailable
         }
         let decoder = JSONDecoder.huddlz
@@ -142,12 +148,12 @@ struct DiscoveryClient {
 }
 
 enum DiscoveryError: LocalizedError {
-    case notFound, unavailable, invalidResponse
+    case notFound, forbidden, unavailable, invalidResponse
 
     var errorDescription: String? {
         switch self {
         case .notFound: "This huddl is no longer available."
-        case .unavailable: "Huddlz couldn’t load right now. Please try again."
+        case .forbidden, .unavailable: "Huddlz couldn’t load right now. Please try again."
         case .invalidResponse: "We couldn’t read the huddl information. Please try again."
         }
     }

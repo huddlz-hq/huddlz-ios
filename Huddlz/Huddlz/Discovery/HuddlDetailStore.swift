@@ -33,9 +33,12 @@ final class HuddlDetailStore {
             loadedToken = token
         } catch {
             guard !Task.isCancelled, request == revision else { return }
-            let notFound: Bool
-            if case DiscoveryError.notFound = error { notFound = true } else { notFound = false }
-            if huddl == nil || notFound {
+            let accessRevoked: Bool
+            switch error {
+            case DiscoveryError.notFound, DiscoveryError.forbidden: accessRevoked = true
+            default: accessRevoked = false
+            }
+            if huddl == nil || accessRevoked {
                 huddl = nil
                 loadedToken = nil
                 errorMessage = error.localizedDescription

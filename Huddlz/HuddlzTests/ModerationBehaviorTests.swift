@@ -831,6 +831,25 @@ struct ModerationBehaviorTests {
         #expect(store.errorMessage == "This huddl is no longer available.")
     }
 
+    @Test("A 403 or a 401 whose visitor retry fails clears cached member-only huddl details", arguments: [
+        [403],
+        [401, 503]
+    ])
+    func revokedAccessClearsMemberHuddlDetail(reloadStatuses: [Int]) async {
+        var statuses = [200] + reloadStatuses
+        let store = HuddlDetailStore(id: "coffee", client: DiscoveryClient { request in
+            let status = statuses.removeFirst()
+            return HTTPFixture.response(request, body: status == 200 ? "{\"data\":\(HTTPFixture.coffee)}" : "{}", status: status)
+        })
+        await store.load(token: "member-token")
+        #expect(store.huddl?.title == "Coffee with neighbors")
+
+        await store.load(token: "member-token")
+        #expect(store.huddl == nil)
+        #expect(store.errorMessage == "Huddlz couldn’t load right now. Please try again.")
+        #expect(statuses.isEmpty)
+    }
+
     @Test("A cached group load does not interrupt an in-flight next batch")
     func cachedGroupLoadPreservesInFlightLoadMore() async {
         let pendingMore = PendingHTTPResponse()
