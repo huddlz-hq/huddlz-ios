@@ -66,6 +66,9 @@ struct AccountView: View {
                 if !isRegistering, let message = account.message {
                     Text(message).foregroundStyle(.secondary)
                 }
+                if !isRegistering {
+                    supportAndLegalLinks
+                }
             }
             .padding(24)
             .padding(.top, 12)
@@ -76,7 +79,7 @@ struct AccountView: View {
         }
         .scrollBounceBehavior(.basedOnSize)
         .presentationBackground(.regularMaterial)
-        .presentationDetents(dynamicTypeSize.isAccessibilitySize || isRegistering ? [.large] : [.height(account.user == nil ? 640 : 360), .large])
+        .presentationDetents(dynamicTypeSize.isAccessibilitySize || isRegistering ? [.large] : [.height(account.user == nil ? 700 : 480), .large])
         .presentationDragIndicator(.visible)
         .interactiveDismissDisabled(account.isBusy)
         .sheet(isPresented: $isResettingPassword) { PasswordResetView(email: $email) }
@@ -190,6 +193,37 @@ struct AccountView: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .surfaceCard()
+    }
+
+    private var supportAndLegalLinks: some View {
+        VStack(spacing: 0) {
+            externalLinkRow("Help & Support", path: "help")
+            Divider().padding(.horizontal, 16)
+            externalLinkRow("Privacy Policy", path: "privacy")
+            Divider().padding(.horizontal, 16)
+            externalLinkRow("Terms of Service", path: "terms")
+            Divider().padding(.horizontal, 16)
+            externalLinkRow("Code of Conduct", path: "code-of-conduct")
+        }
+        .surfaceCard()
+    }
+
+    private func externalLinkRow(_ title: String, path: String) -> some View {
+        Link(destination: URL(string: "https://huddlz.com/" + path)!) {
+            HStack {
+                Text(title)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.primary)
+                Spacer(minLength: 8)
+                Image(systemName: "arrow.up.forward")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .contentShape(.rect)
+        }
     }
 
     private func signIn() {

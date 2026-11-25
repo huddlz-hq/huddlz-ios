@@ -148,6 +148,22 @@ struct GroupsBehaviorTests {
         #expect(store.groups.map(\.id) == ["runners"])
     }
 
+    @Test("An expired session during groups load signs the person out so they can sign in again")
+    func expiredSessionSignsOutOnGroupsLoad() async throws {
+        let tokens = SessionTokenStore(service: "com.huddlz.tests.\(UUID())")
+        defer { Task { try? await tokens.clear() } }
+        let account = AccountStore(client: AccountClient { request in
+            guard request.url?.path == "/api/json/groups/mine" else { return HTTPFixture.response(request, body: Self.session) }
+            return HTTPFixture.response(request, body: "{}", status: 401)
+        }, tokens: tokens)
+        await account.signIn(email: "neighbor@example.com", password: "sample-password")
+        let store = GroupsStore()
+        await store.load(account: account)
+        #expect(account.user == nil)
+        #expect(account.message == "Your session has expired. Please sign in again.")
+        #expect(try await tokens.load() == nil)
+    }
+
     private actor Requests {
         private(set) var urls: [URL] = []
         func add(_ url: URL) { urls.append(url) }

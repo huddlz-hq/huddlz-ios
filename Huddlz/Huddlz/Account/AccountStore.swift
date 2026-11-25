@@ -144,11 +144,22 @@ final class AccountStore {
 
     /// Runs an authenticated request and discards its result if the account changed meanwhile.
     private func forCurrentUser<Value>(_ request: (String) async throws -> Value) async throws -> Value {
+        let session = sessionRevision
         guard let userID = user?.id, let token = try await tokens.load() else { throw AccountError.unauthorized }
-        let value = try await request(token)
-        guard user?.id == userID else { throw CancellationError() }
-        try Task.checkCancellation()
-        return value
+        guard session == sessionRevision else { throw CancellationError() }
+        do {
+            let value = try await request(token)
+            guard user?.id == userID, session == sessionRevision else { throw CancellationError() }
+            try Task.checkCancellation()
+            return value
+        } catch AccountError.unauthorized {
+            guard user?.id == userID, session == sessionRevision else { throw CancellationError() }
+            user = nil
+            canRetrySession = false
+            try? await tokens.clear()
+            message = "Your session has expired. Please sign in again."
+            throw AccountError.unauthorized
+        }
     }
 
     func saveHomeLocation(_ place: DiscoveryPlace) async throws {

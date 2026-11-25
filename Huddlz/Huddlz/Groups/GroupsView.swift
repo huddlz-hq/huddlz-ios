@@ -53,7 +53,7 @@ struct GroupsView: View {
             }
         } else if store.loadedUserID != nil, store.groups.isEmpty {
             ContentUnavailableView("No groups yet", systemImage: "person.2",
-                                   description: Text("Open a huddl and visit its group to join."))
+                                   description: Text("Groups you join on huddlz.com show up here."))
         } else {
             // The groups share one card, as on the canvas.
             VStack(spacing: 0) {
