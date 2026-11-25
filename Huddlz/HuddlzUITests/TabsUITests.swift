@@ -12,10 +12,16 @@ final class TabsUITests: XCTestCase {
         let app = launch()
         XCTAssertTrue(app.staticTexts["Find your people."].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["huddl-coffee"].waitForExistence(timeout: 5))
-        // The search tab is selected: its field is expanded and the other tabs fold into one pill.
         XCTAssertTrue(app.searchFields["Search huddlz"].exists)
         XCTAssertTrue(app.tabBars.buttons["Agenda"].exists)
-        XCTAssertFalse(app.tabBars.buttons["Groups"].exists)
+        if #available(iOS 27, *) {
+            // iOS 27 keeps every tab in the pill and puts Discover's search field in the navigation bar.
+            XCTAssertTrue(app.navigationBars.searchFields["Search huddlz"].exists)
+            XCTAssertTrue(app.tabBars.buttons["Groups"].exists)
+        } else {
+            // The search tab is selected: its field is expanded and the other tabs fold into one pill.
+            XCTAssertFalse(app.tabBars.buttons["Groups"].exists)
+        }
 
         app.tabBars.buttons["Agenda"].tap()
         XCTAssertTrue(app.staticTexts["Sign in to see your agenda"].waitForExistence(timeout: 5))

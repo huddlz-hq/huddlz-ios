@@ -279,10 +279,12 @@ struct AccountBehaviorTests {
         }
         let account = AccountStore(client: client, tokens: tokens)
         await account.signIn(email: "neighbor@example.com", password: "sample-password")
-        #expect(account.user?.avatarURL?.absoluteString == expected)
+        let signedIn = try #require(account.user)
+        #expect(signedIn.avatarURL?.absoluteString == expected)
 
         let restored = AccountStore(client: client, tokens: tokens)
         await restored.restore()
-        #expect(restored.user?.avatarURL?.absoluteString == expected)
+        let restoredUser = try #require(restored.user)
+        #expect(restoredUser.avatarURL?.absoluteString == expected)
     }
 }

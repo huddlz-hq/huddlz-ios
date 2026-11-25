@@ -96,11 +96,12 @@ struct GroupDetailBehaviorTests {
         ("\"javascript:alert(1)\"", nil),
         ("\"   \"", nil)
     ] as [(String, String?)])
-    func groupImageURLValidation(rawValue: String, expected: String?) async {
+    func groupImageURLValidation(rawValue: String, expected: String?) async throws {
         let groupBody = #"{"data":{"type":"group","id":"neighbors","attributes":{"name":"Juniper Neighbors","description":null,"location":"Austin, TX","image_url":\#(rawValue)}}}"#
         let store = GroupDetailStore(id: "neighbors", client: Self.client(group: { (200, groupBody) },
                                                                             huddlz: { (200, HTTPFixture.page([])) }))
         await store.load()
-        #expect(store.group?.imageURL?.absoluteString == expected)
+        let group = try #require(store.group)
+        #expect(group.imageURL?.absoluteString == expected)
     }
 }
