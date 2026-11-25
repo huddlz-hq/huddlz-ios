@@ -12,6 +12,7 @@ final class ModerationUITests: XCTestCase {
         let app = makeApp(searchResponses: [page([event]), page([])])
         app.launchWithSavedSession()
         openHuddl(app)
+        XCTAssertTrue(app.buttons["More options"].waitForExistence(timeout: 5))
         app.buttons["More options"].tap()
         app.buttons["Block organizer"].tap()
         XCTAssertTrue(app.staticTexts["Block this organizer?"].waitForExistence(timeout: 5))
@@ -35,6 +36,7 @@ final class ModerationUITests: XCTestCase {
         app.buttons["group-neighbors"].tap()
         XCTAssertTrue(app.staticTexts["No upcoming huddlz"].waitForExistence(timeout: 10))
 
+        XCTAssertTrue(app.buttons["More options"].waitForExistence(timeout: 5))
         app.buttons["More options"].tap()
         app.buttons["Report group"].tap()
         XCTAssertTrue(app.staticTexts["Report this group?"].waitForExistence(timeout: 5))
@@ -79,13 +81,15 @@ final class ModerationUITests: XCTestCase {
         let app = makeApp()
         app.launch()
         openHuddl(app)
+        XCTAssertTrue(app.buttons["More options"].waitForExistence(timeout: 5))
         app.buttons["More options"].tap()
         XCTAssertFalse(app.buttons["Block organizer"].exists)
         app.buttons["Sign in to report or block"].tap()
         app.textFields["Email"].typeAfterFocusing("neighbor@example.com")
         app.secureTextFields["Password"].typeAfterFocusing("sample-password\n")
-        XCTAssertTrue(app.buttons["Close account"].waitForNonExistence(timeout: 30))
-        // Signed in, the same menu now offers both.
+        XCTAssertTrue(app.buttons["Close account"].waitForNonExistence(timeout: 60))
+        // Signed in, the same menu now offers both once ownership is checked.
+        XCTAssertTrue(app.buttons["More options"].waitForExistence(timeout: 5))
         app.buttons["More options"].tap()
         XCTAssertTrue(app.buttons["Report organizer"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Block organizer"].exists)

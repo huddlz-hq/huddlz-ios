@@ -276,14 +276,37 @@ struct ModerationBehaviorTests {
         defer { Task { try? await tokens.clear() } }
         let store = ModerationStore(subject: subject)
         #expect(!store.isOwn)
+        #expect(!store.showsMenu(for: account.user))
         await store.checkOwnership(account: account)
         #expect(store.isOwn == own)
+        #expect(store.showsMenu(for: account.user) == !own)
         #expect(checks == 1)
         // Once they sign out, the page offers the options again and asks the server nothing.
         await account.signOut()
         await store.checkOwnership(account: account)
         #expect(!store.isOwn)
+        #expect(store.showsMenu(for: account.user))
         #expect(checks == 1)
+    }
+
+    @Test("Owners never flash report or block options while ownership is still loading")
+    func menuWaitsForOwnershipCheck() async throws {
+        let pending = PendingHTTPResponse()
+        let (account, tokens) = await signedIn { request in
+            guard request.url?.path == "/api/json/huddlz/coffee" else { return nil }
+            return try await pending.fetch(request)
+        }
+        defer { Task { try? await tokens.clear() } }
+        let store = ModerationStore(subject: .huddl("coffee"))
+        #expect(store.showsMenu(for: nil))
+        #expect(!store.showsMenu(for: account.user))
+        let check = Task { await store.checkOwnership(account: account) }
+        await pending.waitUntilRequested()
+        #expect(!store.showsMenu(for: account.user))
+        pending.finish(body: #"{"data":{"id":"coffee","attributes":{"organized_by_me":true}}}"#)
+        await check.value
+        #expect(store.isOwn)
+        #expect(!store.showsMenu(for: account.user))
     }
 
     @Test("When the ownership check fails, the report and block options stay", arguments: [
@@ -507,29 +530,65 @@ struct ModerationBehaviorTests {
         #expect(authorizations == [nil, nil])
     }
 
-    @Test("Signing in re-runs the same search as that person and keeps the cards until it lands")
-    func signingInRerunsTheSearchInPlace() async {
-        let pending = PendingHTTPResponse()
-        var searches = 0
+    @Test("Changing viewer drops previous cards, cursor, and token even when the new search fails")
+    func viewerChangeClearsPreviousResultsAndToken() async {
+        var authorizations: [String?] = []
+        var failVisitor = true
+        let next = "https://huddlz.com/api/json/huddlz?page%5Bafter%5D=coffee"
         let discovery = DiscoveryStore(client: DiscoveryClient { request in
-            searches += 1
-            if request.value(forHTTPHeaderField: "Authorization") != nil { return try await pending.fetch(request) }
-            return HTTPFixture.response(request, body: HTTPFixture.page([HTTPFixture.coffee, HTTPFixture.hike]))
+            let authorization = request.value(forHTTPHeaderField: "Authorization")
+            authorizations.append(authorization)
+            if authorization == "Bearer fixture-token" {
+                return HTTPFixture.response(request, body: HTTPFixture.page([HTTPFixture.coffee], next: next))
+            }
+            if failVisitor { return HTTPFixture.response(request, body: "{}", status: 503) }
+            return HTTPFixture.response(request, body: HTTPFixture.page([HTTPFixture.hike]))
         })
         let query = DiscoveryQuery()
-        await discovery.load(query)
-        await discovery.load(query)
-        #expect(searches == 1)
-        let rerun = Task { await discovery.load(query, token: "fixture-token") }
-        await pending.waitUntilRequested()
-        #expect(discovery.huddlz.map(\.id) == ["coffee", "hike"])
-        #expect(!discovery.isLoading)
-        #expect(discovery.isRefreshing)
-        pending.finish(body: HTTPFixture.page([HTTPFixture.hike]))
-        await rerun.value
-        #expect(discovery.huddlz.map(\.id) == ["hike"])
         await discovery.load(query, token: "fixture-token")
-        #expect(searches == 2)
+        #expect(discovery.huddlz.map(\.id) == ["coffee"])
+        #expect(discovery.nextPage?.absoluteString == next)
+
+        // Signing out (or account deletion / expiry) drops member cards and cursor before the visitor search finishes.
+        await discovery.load(query, token: nil)
+        #expect(discovery.huddlz.isEmpty)
+        #expect(discovery.nextPage == nil)
+        #expect(discovery.errorMessage != nil)
+        // Paginating after the failed visitor refresh cannot send the old member's token.
+        await discovery.loadMore()
+        #expect(authorizations == ["Bearer fixture-token", nil])
+
+        failVisitor = false
+        await discovery.load(query, token: nil)
+        #expect(discovery.huddlz.map(\.id) == ["hike"])
+        #expect(discovery.errorMessage == nil)
+        await discovery.load(query, token: nil)
+        #expect(authorizations == ["Bearer fixture-token", nil, nil])
+    }
+
+    @Test("A block supersedes an in-flight refresh or search so the blocked organizer’s huddlz cannot stay")
+    func blockSupersedesInFlightRefresh() async {
+        let pendingRefresh = PendingHTTPResponse()
+        var isBlocked = false
+        var calls = 0
+        let discovery = DiscoveryStore(client: DiscoveryClient { request in
+            calls += 1
+            if calls == 2 { return try await pendingRefresh.fetch(request) }
+            let events = isBlocked ? [HTTPFixture.hike] : [HTTPFixture.coffee, HTTPFixture.hike]
+            return HTTPFixture.response(request, body: HTTPFixture.page(events))
+        })
+        let query = DiscoveryQuery()
+        await discovery.load(query, token: "fixture-token")
+        #expect(discovery.huddlz.map(\.id) == ["coffee", "hike"])
+
+        let staleRefresh = Task { await discovery.refresh(query, token: "fixture-token") }
+        await pendingRefresh.waitUntilRequested()
+        isBlocked = true
+        await discovery.refresh(query, token: "fixture-token", superseding: true)
+        pendingRefresh.finish(body: HTTPFixture.page([HTTPFixture.coffee, HTTPFixture.hike]))
+        await staleRefresh.value
+        #expect(discovery.huddlz.map(\.id) == ["hike"])
+        #expect(!discovery.isRefreshing)
     }
 
     @Test("An expired session still searches, as a visitor")
@@ -638,6 +697,86 @@ struct ModerationBehaviorTests {
         #expect(authorizations == ["Bearer expired", nil])
         #expect(store.huddlz.map(\.id) == ["coffee"])
         #expect(store.huddlzError == nil)
+    }
+
+    @Test("Changing viewer while a group header is loading never fetches its huddlz with the old token")
+    func groupViewerChangeDuringHeaderLoadDropsOldToken() async {
+        let pendingGroup = PendingHTTPResponse()
+        var byGroupAuth: [String?] = []
+        let store = GroupDetailStore(id: "neighbors", client: DiscoveryClient { request in
+            let authorization = request.value(forHTTPHeaderField: "Authorization")
+            if request.url?.path == "/api/json/groups/neighbors" {
+                if authorization != nil { return try await pendingGroup.fetch(request) }
+                return HTTPFixture.response(request, body: Self.group)
+            }
+            byGroupAuth.append(authorization)
+            return HTTPFixture.response(request, body: HTTPFixture.page([HTTPFixture.hike]))
+        })
+        let memberLoad = Task { await store.load(token: "member-token") }
+        await pendingGroup.waitUntilRequested()
+        await store.reloadHuddlz(token: nil)
+        pendingGroup.finish(body: Self.group)
+        await memberLoad.value
+        #expect(byGroupAuth == [nil])
+        #expect(store.group?.attributes.name == "Juniper Neighbors")
+        #expect(store.huddlz.map(\.id) == ["hike"])
+    }
+
+    @Test("A private group disappears when the member signs out")
+    func privateGroupClearsOnSignOut() async {
+        let store = GroupDetailStore(id: "neighbors", client: DiscoveryClient { request in
+            let isMember = request.value(forHTTPHeaderField: "Authorization") == "Bearer member-token"
+            if !isMember { return HTTPFixture.response(request, body: "{}", status: 404) }
+            if request.url?.path == "/api/json/groups/neighbors" {
+                return HTTPFixture.response(request, body: Self.group)
+            }
+            return HTTPFixture.response(request, body: HTTPFixture.page([HTTPFixture.coffee]))
+        })
+        await store.load(token: "member-token")
+        #expect(store.group?.attributes.name == "Juniper Neighbors")
+        #expect(store.huddlz.map(\.id) == ["coffee"])
+
+        await store.reloadHuddlz(token: nil)
+        #expect(store.group == nil)
+        #expect(store.huddlz.isEmpty)
+        #expect(store.errorMessage == "This group is no longer available.")
+    }
+
+    @Test("A member-only huddl opens with the member’s session and disappears when they sign out")
+    func memberOnlyHuddlDetailUsesSessionAndClearsOnSignOut() async {
+        var authorizations: [String?] = []
+        let store = HuddlDetailStore(id: "coffee", client: DiscoveryClient { request in
+            let authorization = request.value(forHTTPHeaderField: "Authorization")
+            authorizations.append(authorization)
+            guard authorization == "Bearer member-token" else {
+                return HTTPFixture.response(request, body: "{}", status: 404)
+            }
+            return HTTPFixture.response(request, body: "{\"data\":\(HTTPFixture.coffee)}")
+        })
+        await store.load(token: "member-token")
+        #expect(store.huddl?.title == "Coffee with neighbors")
+        #expect(store.errorMessage == nil)
+
+        await store.load(token: nil)
+        #expect(store.huddl == nil)
+        #expect(store.errorMessage == "This huddl is no longer available.")
+        #expect(authorizations == ["Bearer member-token", nil])
+    }
+
+    @Test("Authenticated discovery refuses HTTP redirects so bearer tokens never leave the API origin")
+    func discoveryUsesNoRedirectPolicy() async throws {
+        let policy = try #require(DiscoveryClient.sharedSession.delegate as? AccountRedirectPolicy)
+        let url = URL(string: "https://huddlz.com/api/json/huddlz")!
+        let redirect = HTTPURLResponse(url: url, statusCode: 302, httpVersion: nil, headerFields: ["Location": "https://other.example/steal"])!
+        let nextRequest = URLRequest(url: URL(string: "https://other.example/steal")!)
+        let dummyTask = DiscoveryClient.sharedSession.dataTask(with: url)
+        let allowed: URLRequest? = await withCheckedContinuation { continuation in
+            policy.urlSession(DiscoveryClient.sharedSession, task: dummyTask,
+                              willPerformHTTPRedirection: redirect, newRequest: nextRequest) { request in
+                continuation.resume(returning: request)
+            }
+        }
+        #expect(allowed == nil)
     }
 
     // MARK: Searching once, as the right person

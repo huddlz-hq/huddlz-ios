@@ -17,17 +17,29 @@ final class ModerationStore {
     private(set) var reportError: String?
     private(set) var notice: ModerationNotice?
     private var ownershipCheck = UUID()
+    private var checkedUserID: String?
 
     init(subject: ModerationSubject) { self.subject = subject }
+
+    /// Visitors get a sign-in prompt right away; signed-in members wait for the ownership check so owners never flash self-report controls.
+    func showsMenu(for user: AccountUser?) -> Bool {
+        guard let user else { return true }
+        return checkedUserID == user.id && !isOwn
+    }
 
     func checkOwnership(account: AccountStore) async {
         let check = UUID()
         ownershipCheck = check
         isOwn = false
-        guard account.user != nil else { return }
+        guard let userID = account.user?.id else {
+            checkedUserID = nil
+            return
+        }
+        if checkedUserID != userID { checkedUserID = nil }
         // If the check fails, the menu stays: the server still refuses a report or block of yourself.
         let own = (try? await account.isOwn(subject)) ?? false
-        guard check == ownershipCheck, !Task.isCancelled else { return }
+        guard check == ownershipCheck, !Task.isCancelled, account.user?.id == userID else { return }
+        checkedUserID = userID
         isOwn = own
     }
 

@@ -27,7 +27,7 @@ private struct ModerationMenu: ViewModifier {
     func body(content: Content) -> some View {
         content
             .toolbar {
-                if isShown, !store.isOwn {
+                if isShown, store.showsMenu(for: account.user) {
                     ToolbarItem(placement: .topBarTrailing) { menu }
                 }
             }

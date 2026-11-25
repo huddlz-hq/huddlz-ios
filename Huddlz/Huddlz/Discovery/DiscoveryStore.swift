@@ -23,18 +23,16 @@ final class DiscoveryStore {
 
     /// Pass the session token to search as the signed-in person, or nil to search as a visitor.
     func load(_ query: DiscoveryQuery, token: String? = nil) async {
-        if loadedQuery != query {
-            await search(query, token: token)
-        } else if loadedToken != token {
-            // Signing in or out re-runs the same search as that person, keeping the cards meanwhile.
-            await refresh(query, token: token)
-        }
+        guard loadedQuery != query || loadedToken != token else { return }
+        // A new query or viewer drops the previous results, cursor, and token immediately.
+        await search(query, token: token)
     }
 
     func search(_ query: DiscoveryQuery, token: String? = nil) async {
         let request = UUID()
         revision = request
         loadedQuery = nil
+        loadedToken = nil
         isLoading = true
         isRefreshing = false
         isLoadingMore = false
@@ -57,8 +55,19 @@ final class DiscoveryStore {
         }
     }
 
-    func refresh(_ query: DiscoveryQuery, token: String? = nil) async {
-        guard !isLoading, !isRefreshing else { return }
+    func refresh(_ query: DiscoveryQuery, token: String? = nil, superseding: Bool = false) async {
+        if loadedToken != token {
+            await search(query, token: token)
+            return
+        }
+        if superseding {
+            if loadedQuery != query || isLoading {
+                await search(query, token: token)
+                return
+            }
+        } else {
+            guard !isLoading, !isRefreshing else { return }
+        }
         let request = UUID()
         revision = request
         isRefreshing = true
@@ -69,6 +78,7 @@ final class DiscoveryStore {
             guard request == revision, !Task.isCancelled else { return }
             huddlz = page.huddlz
             nextPage = page.next
+            loadedQuery = query
             loadedToken = token
             errorMessage = nil
             refreshError = nil

@@ -65,8 +65,13 @@ struct DiscoveryView: View {
             guard account.hasCheckedSession else { return }
             await store.load(preferences.query, token: await account.browsingToken())
         }
-        // A block or unblock takes effect in place, keeping the cards on screen meanwhile.
-        .onChange(of: account.blockRevision) { Task { await refresh() } }
+        // A block or unblock supersedes any earlier search or refresh so blocked huddlz cannot linger.
+        .onChange(of: account.blockRevision) {
+            Task {
+                guard account.hasCheckedSession else { return }
+                await refresh(superseding: true)
+            }
+        }
         // The search-role tab shows this field in the tab bar and expands it when tapped.
         .searchable(text: $searchText, prompt: "Search huddlz")
         .searchToolbarBehavior(.minimize)
@@ -75,8 +80,8 @@ struct DiscoveryView: View {
         .navigationDestination(for: Huddl.ID.self) { HuddlDetailView(id: $0) }
     }
 
-    private func refresh() async {
-        await store.refresh(preferences.query, token: await account.browsingToken())
+    private func refresh(superseding: Bool = false) async {
+        await store.refresh(preferences.query, token: await account.browsingToken(), superseding: superseding)
         badgeRefresh = UUID()
     }
 

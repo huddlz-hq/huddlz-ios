@@ -511,7 +511,7 @@ enum AccountError: Error {
 }
 
 // Credentials and bearer tokens must never follow redirects to another endpoint.
-private final class AccountRedirectPolicy: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+final class AccountRedirectPolicy: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     func urlSession(_ session: URLSession, task: URLSessionTask,
                     willPerformHTTPRedirection response: HTTPURLResponse,
                     newRequest request: URLRequest,

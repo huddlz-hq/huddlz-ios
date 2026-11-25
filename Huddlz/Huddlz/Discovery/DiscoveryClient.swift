@@ -6,6 +6,13 @@ struct DiscoveryPage {
 }
 
 struct DiscoveryClient {
+    static let sharedSession: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.httpShouldSetCookies = false
+        configuration.timeoutIntervalForRequest = 30
+        return URLSession(configuration: configuration, delegate: AccountRedirectPolicy(), delegateQueue: nil)
+    }()
+
     private let baseURL: URL
     private let fetch: (URLRequest) async throws -> (Data, URLResponse)
 
@@ -23,10 +30,7 @@ struct DiscoveryClient {
                 return
             }
             #endif
-            let configuration = URLSessionConfiguration.ephemeral
-            configuration.httpShouldSetCookies = false
-            configuration.timeoutIntervalForRequest = 30
-            let session = URLSession(configuration: configuration)
+            let session = Self.sharedSession
             self.fetch = { try await session.data(for: $0) }
         }
     }
@@ -60,13 +64,13 @@ struct DiscoveryClient {
         return DiscoveryPage(huddlz: document.data, next: document.links?.next)
     }
 
-    func detail(id: Huddl.ID) async throws -> Huddl {
+    func detail(id: Huddl.ID, token: String? = nil) async throws -> Huddl {
         var components = URLComponents(url: baseURL.appending(path: "api/json/huddlz").appending(component: id), resolvingAgainstBaseURL: false)!
         components.queryItems = [
             URLQueryItem(name: "include", value: "group"),
             URLQueryItem(name: "fields[group]", value: "name,slug")
         ]
-        let document: DetailDocument = try await get(components.url!)
+        let document: DetailDocument = try await get(components.url!, token: token)
         var huddl = document.data
         if let host = huddl.relationships?.group?.data, host.type == "group" {
             let group = document.included?.first { $0.type == host.type && $0.id == host.id }?.attributes
@@ -76,8 +80,8 @@ struct DiscoveryClient {
         return huddl
     }
 
-    func group(id: String) async throws -> HostingGroup {
-        let document: GroupDocument = try await get(baseURL.appending(path: "api/json/groups").appending(component: id))
+    func group(id: String, token: String? = nil) async throws -> HostingGroup {
+        let document: GroupDocument = try await get(baseURL.appending(path: "api/json/groups").appending(component: id), token: token)
         return document.data
     }
 
