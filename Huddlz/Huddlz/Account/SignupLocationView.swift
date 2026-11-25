@@ -22,7 +22,7 @@ struct SignupLocationView: View {
                 Text("Where should we find huddlz?")
                     .font(.largeTitle.bold())
                     .accessibilityAddTraits(.isHeader)
-                Text("Choose a home city to find huddlz nearby. You can do this later.")
+                Text("Choose a home city to find huddlz nearby. You can also set this anytime on huddlz.com.")
                     .foregroundStyle(.secondary)
                 if let selectedCity {
                     VStack(alignment: .leading, spacing: 8) {

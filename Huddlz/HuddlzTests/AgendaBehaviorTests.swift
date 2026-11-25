@@ -162,4 +162,20 @@ struct AgendaBehaviorTests {
         await agenda.load(account: account)
         #expect(agenda.days.isEmpty)
     }
+
+    @Test("An expired session during agenda load signs the person out so they can sign in again")
+    func expiredSessionSignsOutOnAgendaLoad() async throws {
+        let tokens = SessionTokenStore(service: "com.huddlz.tests.\(UUID())")
+        defer { Task { try? await tokens.clear() } }
+        let account = AccountStore(client: AccountClient { request in
+            guard request.url?.path == "/api/json/huddlz/upcoming" else { return HTTPFixture.response(request, body: Self.session) }
+            return HTTPFixture.response(request, body: "{}", status: 401)
+        }, tokens: tokens)
+        await account.signIn(email: "neighbor@example.com", password: "sample-password")
+        let store = AgendaStore()
+        await store.load(account: account)
+        #expect(account.user == nil)
+        #expect(account.message == "Your session has expired. Please sign in again.")
+        #expect(try await tokens.load() == nil)
+    }
 }
